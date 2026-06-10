@@ -1,14 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { useAppStore, usePersonaStore, usePetStore } from '@/store';
+import { useAppStore, usePersonaStore, usePetStore, useCozeConfigStore } from '@/store';
 
 export function SettingsPage() {
   const userNickname = useAppStore((s) => s.userNickname);
   const setUserNickname = useAppStore((s) => s.setUserNickname);
   const { params, loadParams } = usePersonaStore();
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const { config: cozeConfig, saveConfig, clearConfig } = useCozeConfigStore();
 
   const [nicknameInput, setNicknameInput] = useState(userNickname);
   const [showPersonaEditor, setShowPersonaEditor] = useState(false);
+  const [showApiEditor, setShowApiEditor] = useState(false);
+  const [apiToken, setApiToken] = useState(cozeConfig?.token || '');
+  const [apiBotId, setApiBotId] = useState(cozeConfig?.botId || '');
+  const [apiBaseUrl, setApiBaseUrl] = useState(cozeConfig?.baseUrl || 'https://api.coze.cn/v3/chat');
+  const [apiError, setApiError] = useState('');
+  const [apiSaved, setApiSaved] = useState(false);
+
+  useEffect(() => {
+    loadParams();
+    setNicknameInput(userNickname);
+    setApiToken(cozeConfig?.token || '');
+    setApiBotId(cozeConfig?.botId || '');
+    setApiBaseUrl(cozeConfig?.baseUrl || 'https://api.coze.cn/v3/chat');
+  }, [userNickname, cozeConfig]);
+
+  const handleSaveApiConfig = () => {
+    setApiError('');
+    setApiSaved(false);
+    if (!apiToken.trim()) { setApiError('请输入 Token'); return; }
+    if (!apiBotId.trim()) { setApiError('请输入 Bot ID'); return; }
+    saveConfig({
+      token: apiToken.trim(),
+      botId: apiBotId.trim(),
+      baseUrl: apiBaseUrl.trim().replace(/\/$/, ''),
+    });
+    setApiSaved(true);
+    setTimeout(() => setApiSaved(false), 2500);
+  };
 
   useEffect(() => {
     loadParams();
@@ -34,6 +63,110 @@ export function SettingsPage() {
             保存
           </button>
         </div>
+      </div>
+
+      {/* Coze API 配置 */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>🔑 Coze API 配置</span>
+          <button
+            className="btn btn-secondary"
+            style={{ padding: '4px 12px', fontSize: 12 }}
+            onClick={() => setShowApiEditor(!showApiEditor)}
+          >
+            {showApiEditor ? '收起' : cozeConfig ? '修改' : '配置'}
+          </button>
+        </div>
+        {showApiEditor ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                API Token
+              </label>
+              <input
+                className="input-field"
+                type="password"
+                value={apiToken}
+                onChange={(e) => setApiToken(e.target.value)}
+                placeholder="Coze API Token"
+                style={{ fontFamily: 'monospace' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                Bot ID
+              </label>
+              <input
+                className="input-field"
+                value={apiBotId}
+                onChange={(e) => setApiBotId(e.target.value)}
+                placeholder="Coze Bot ID"
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                API 地址
+              </label>
+              <input
+                className="input-field"
+                value={apiBaseUrl}
+                onChange={(e) => setApiBaseUrl(e.target.value)}
+                placeholder="https://api.coze.cn/v3/chat"
+              />
+            </div>
+            {apiError && (
+              <div style={{ fontSize: 12, color: 'var(--accent-heart)', padding: '6px 10px', background: 'rgba(224,96,96,0.1)', borderRadius: 6 }}>
+                ⚠️ {apiError}
+              </div>
+            )}
+            {apiSaved && (
+              <div style={{ fontSize: 12, color: 'var(--accent-leaf)', padding: '6px 10px', background: 'rgba(126,202,152,0.1)', borderRadius: 6 }}>
+                ✅ 配置已保存
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={handleSaveApiConfig}>保存配置</button>
+              {cozeConfig && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    if (confirm('确定要清除 API 配置吗？清除后需重新配置才能使用心元。')) {
+                      clearConfig();
+                      setShowApiEditor(true);
+                    }
+                  }}
+                >
+                  清除配置
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div>
+            {cozeConfig ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--bg-tertiary)', borderRadius: 6, fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Token</span>
+                  <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                    {cozeConfig.token.slice(0, 6)}…{cozeConfig.token.slice(-4)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--bg-tertiary)', borderRadius: 6, fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Bot ID</span>
+                  <span style={{ fontWeight: 600 }}>{cozeConfig.botId}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--bg-tertiary)', borderRadius: 6, fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>API 地址</span>
+                  <span style={{ fontWeight: 600 }}>{cozeConfig.baseUrl}</span>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>
+                尚未配置。点击"配置"添加你的 Coze API 凭据。
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* AI人格参数 */}

@@ -1,11 +1,20 @@
 // Coze API v3 接口服务
 // bot_id: 7647439577560727552
 
-const COZE_CONFIG = {
-  baseUrl: import.meta.env.VITE_COZE_BASE_URL || 'https://api.coze.cn/v3/chat',
-  token: import.meta.env.VITE_COZE_TOKEN || 'your-coze-token-here',
-  botId: import.meta.env.VITE_COZE_BOT_ID || 'your-bot-id-here',
-};
+import { useCozeConfigStore } from '@/store';
+
+function getCozeConfig(): { baseUrl: string; token: string; botId: string } {
+  const state = useCozeConfigStore.getState();
+  if (state.isConfigured && state.config) {
+    return state.config; // 用户自定义凭据优先
+  }
+  // 内置默认凭据：开箱即用，无需用户配置
+  return {
+    baseUrl: 'https://api.coze.cn/v3/chat',
+    token: 'pat_FkImL7mNAefU1MXLUbmwu5DrGKT6q07kzfemXqsIjJA82XZpZjlkcyXgzrOEuzR1',
+    botId: '7647439577560727552',
+  };
+}
 
 interface CozeMessage {
   role: 'user' | 'assistant';
@@ -39,7 +48,7 @@ export async function chatWithCoze(
   status: string;
 }> {
   const body: any = {
-    bot_id: COZE_CONFIG.botId,
+    bot_id: getCozeConfig().botId,
     user_id: 'local_user',
     stream: false,
     auto_save_history: true,
@@ -95,10 +104,10 @@ export async function chatWithCoze(
 
   console.log('[Coze API] 发送请求...', body.additional_messages.length, '条消息');
 
-  const response = await fetch(COZE_CONFIG.baseUrl, {
+  const response = await fetch(getCozeConfig().baseUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${COZE_CONFIG.token}`,
+      'Authorization': `Bearer ${getCozeConfig().token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
@@ -134,7 +143,7 @@ export async function chatWithCoze(
 
       const pollResp = await fetch(retrieveUrl, {
         headers: {
-          'Authorization': `Bearer ${COZE_CONFIG.token}`,
+          'Authorization': `Bearer ${getCozeConfig().token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -155,7 +164,7 @@ export async function chatWithCoze(
           `https://api.coze.cn/v3/chat/message/list?conversation_id=${convId}&chat_id=${chatId}`,
           {
             headers: {
-              'Authorization': `Bearer ${COZE_CONFIG.token}`,
+              'Authorization': `Bearer ${getCozeConfig().token}`,
               'Content-Type': 'application/json',
             },
           }
@@ -211,7 +220,7 @@ export async function* chatWithCozeStream(
   history?: CozeMessage[],
 ): AsyncGenerator<{ chunk: string; done: boolean; conversationId?: string }> {
   const body: any = {
-    bot_id: COZE_CONFIG.botId,
+    bot_id: getCozeConfig().botId,
     user_id: 'local_user',
     stream: true,
     auto_save_history: true,
@@ -259,10 +268,10 @@ export async function* chatWithCozeStream(
     ];
   }
 
-  const response = await fetch(COZE_CONFIG.baseUrl, {
+  const response = await fetch(getCozeConfig().baseUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${COZE_CONFIG.token}`,
+      'Authorization': `Bearer ${getCozeConfig().token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
@@ -319,7 +328,7 @@ export async function getCozeConversationHistory(conversationId: string): Promis
     `https://api.coze.cn/v1/conversation/message/list?conversation_id=${conversationId}`,
     {
       headers: {
-        'Authorization': `Bearer ${COZE_CONFIG.token}`,
+        'Authorization': `Bearer ${getCozeConfig().token}`,
         'Content-Type': 'application/json',
       },
     }

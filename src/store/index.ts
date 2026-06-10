@@ -63,6 +63,41 @@ export const useAppStore = create<AppState>((set, get) => ({
   getCozeConvId: (sessionId) => get().cozeConvMap[sessionId],
 }));
 
+// ============ Coze 配置 Store ============
+interface CozeConfig {
+  token: string;
+  botId: string;
+  baseUrl: string;
+}
+
+interface CozeConfigState {
+  config: CozeConfig | null;
+  isConfigured: boolean;
+  saveConfig: (config: CozeConfig) => void;
+  clearConfig: () => void;
+  loadConfig: () => void;
+}
+
+export const useCozeConfigStore = create<CozeConfigState>((set) => ({
+  config: storage.get('cozeConfig', null),
+  isConfigured: !!storage.get('cozeConfig', null),
+
+  saveConfig: (config) => {
+    storage.set('cozeConfig', config);
+    set({ config, isConfigured: true });
+  },
+
+  clearConfig: () => {
+    storage.set('cozeConfig', null);
+    set({ config: null, isConfigured: false });
+  },
+
+  loadConfig: () => {
+    const config = storage.get('cozeConfig', null);
+    set({ config, isConfigured: !!config });
+  },
+}));
+
 // ============ 对话 Store ============
 interface Message {
   id: string;
