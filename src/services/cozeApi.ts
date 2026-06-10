@@ -133,35 +133,43 @@ export async function chatWithCoze(
   let chatData: any = data;
   const chatId = data.data?.id || '';
   const convId = data.data?.conversation_id || conversationId || '';
+  const initialStatus = chatData.data?.status || '';
 
-  if (chatData.data?.status === 'in_progress') {
+  // 轮询直到完成（覆盖 created / in_progress 等非终态）
+  if (initialStatus !== 'completed' && initialStatus !== 'failed') {
     const retrieveUrl = `https://api.coze.cn/v3/chat/retrieve?conversation_id=${convId}&chat_id=${chatId}`;
     let pollCount = 0;
-    const maxPolls = 15;
+    const maxPolls = 30;
 
     while (pollCount < maxPolls) {
       await new Promise(r => setTimeout(r, 1000));
       pollCount++;
       console.log(`[Coze API] 轮询中... (${pollCount}/${maxPolls})`);
 
-      const pollResp = await fetch(retrieveUrl, {
-        headers: {
-          'Authorization': `Bearer ${getCozeConfig().token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      try {
+        const pollResp = await fetch(retrieveUrl, {
+          headers: {
+            'Authorization': `Bearer ${getCozeConfig().token}`,
+            'Content-Type': 'application/json',
+          },
+        });
 
-      if (!pollResp.ok) continue;
+        if (!pollResp.ok) continue;
 
-      const pollData: any = await pollResp.json();
-      if (pollData.code === 0 && pollData.data) {
-        chatData = pollData;
-        if (pollData.data.status !== 'in_progress') break;
+        const pollData: any = await pollResp.json();
+        if (pollData.code === 0 && pollData.data) {
+          if (pollData.data.status === 'completed' || pollData.data.status === 'failed') {
+            chatData = pollData;
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn('[Coze API] 轮询请求失败:', e);
       }
     }
 
-    // 轮询完成后，尝试从消息列表获取回复
-    if (!chatData.data?.messages || chatData.data.messages.length === 0) {
+    // 轮询完成后，如果还是没有 messages，从消息列表获取
+    if (chatData.data?.status === 'completed' && (!chatData.data?.messages || chatData.data.messages.length === 0)) {
       try {
         const msgResp = await fetch(
           `https://api.coze.cn/v3/chat/message/list?conversation_id=${convId}&chat_id=${chatId}`,
@@ -174,7 +182,7 @@ export async function chatWithCoze(
         );
         if (msgResp.ok) {
           const msgData: any = await msgResp.json();
-          if (msgData.code === 0 && msgData.data) {
+          if (msgData.code === 0 && Array.isArray(msgData.data)) {
             chatData = { ...chatData, data: { ...chatData.data, messages: msgData.data } };
             console.log('[Coze API] 从消息列表获取到', msgData.data.length, '条消息');
           }
@@ -185,23 +193,17 @@ export async function chatWithCoze(
     }
   }
 
-  // 解析回复内容
+  // 解析回复内容（仅从 messages 提取，不用不可靠的兜底字段）
   let content = '';
-  if (chatData.data) {
-    if (chatData.data.messages && chatData.data.messages.length > 0) {
-      const assistantMsgs = chatData.data.messages.filter((m: any) => m.role === 'assistant');
-      if (assistantMsgs.length > 0) {
-        content = extractContent(assistantMsgs[assistantMsgs.length - 1]);
-      }
-    }
-    if (!content) {
-      // 兜底：从 data.content / data.answer 提取
-      content = extractContent(chatData.data);
+  if (chatData.data?.messages && chatData.data.messages.length > 0) {
+    const assistantMsgs = chatData.data.messages.filter((m: any) => m.role === 'assistant');
+    if (assistantMsgs.length > 0) {
+      content = extractContent(assistantMsgs[assistantMsgs.length - 1]);
     }
   }
 
   if (!content) {
-    console.warn('[Coze API] 未解析到回复内容，原始响应:', JSON.stringify(chatData).substring(0, 500));
+    console.warn('[Coze API] 未解析到回复内容，chatData.data keys:', Object.keys(chatData.data || {}));
     content = '（心元正在思考...请稍后再试）';
   }
 
