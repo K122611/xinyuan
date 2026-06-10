@@ -43,14 +43,20 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ github.ref_name }}'
+          Write-Host "Tag: $tag"
+          Write-Host "Files in release directory:"
+          Get-ChildItem -Path release
+          
           $exists = gh release view $tag 2>$null
           if (-not $exists) {
             Write-Host "Creating release $tag..."
             gh release create $tag --title "$tag" --notes "自动构建版本"
-          } else {
-            Write-Host "Release $tag already exists, uploading assets..."
           }
-          Get-ChildItem -Path release -Include *.exe,*.exe.blockmap,latest.yml | ForEach-Object {
-            Write-Host "Uploading: $($_.Name)"
-            gh release upload $tag $_.FullName --clobber
+          
+          $files = Get-ChildItem -Path "release\*" -Include "*.exe","*.exe.blockmap","latest.yml"
+          Write-Host "Found $($files.Count) files to upload"
+          foreach ($f in $files) {
+            Write-Host "Uploading: $($f.Name) ($([math]::Round($f.Length/1MB,1)) MB)"
+            gh release upload $tag $f.FullName --clobber
+            Write-Host "Done: $($f.Name)"
           }
