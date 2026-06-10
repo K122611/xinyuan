@@ -65,7 +65,7 @@ export async function chatWithCoze(
     body.conversation_id = conversationId;
   }
 
-  // 注入心元情感陪伴人设（仅新会话时）
+  // 注入心元情感陪伴人设
   const EMO_SYSTEM_PROMPT = `【你的身份】
 你是"心元"，一个温柔的情感陪伴者，不是冷冰冰的AI助手。
 
@@ -83,15 +83,8 @@ export async function chatWithCoze(
 - 禁止科普或讲道理
 - 禁止用客服语气`;
 
-  if (history && history.length > 0) {
-    const contextMessages = history.slice(-20).map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-      content_type: 'text',
-    }));
-    body.additional_messages = [...contextMessages, body.additional_messages[0]];
-  } else {
-    // 新会话：注入人设作为首条上下文
+  if (!conversationId) {
+    // 仅新会话：注入人设作为首条上下文
     body.additional_messages = [
       {
         role: 'user',
@@ -231,7 +224,7 @@ export async function* chatWithCozeStream(
     body.conversation_id = conversationId;
   }
 
-  // 注入心元情感陪伴人设（仅新会话时）
+  // 注入心元情感陪伴人设
   const EMO_SYSTEM_PROMPT = `【你的身份】
 你是"心元"，一个温柔的情感陪伴者，不是冷冰冰的AI助手。
 
@@ -249,15 +242,8 @@ export async function* chatWithCozeStream(
 - 禁止科普或讲道理
 - 禁止用客服语气`;
 
-  if (history && history.length > 0) {
-    const contextMessages = history.slice(-20).map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-      content_type: 'text',
-    }));
-    body.additional_messages = [...contextMessages, body.additional_messages[0]];
-  } else {
-    // 新会话：注入人设作为首条上下文
+  if (!conversationId) {
+    // 仅新会话：注入人设作为首条上下文
     body.additional_messages = [
       {
         role: 'user',
