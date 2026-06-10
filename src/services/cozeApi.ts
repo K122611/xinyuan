@@ -2,9 +2,9 @@
 // bot_id: 7647439577560727552
 
 const COZE_CONFIG = {
-  baseUrl: 'https://api.coze.cn/v3/chat',
-  token: 'pat_FkImL7mNAefU1MXLUbmwu5DrGKT6q07kzfemXqsIjJA82XZpZjlkcyXgzrOEuzR1',
-  botId: '7647439577560727552',
+  baseUrl: import.meta.env.VITE_COZE_BASE_URL || 'https://api.coze.cn/v3/chat',
+  token: import.meta.env.VITE_COZE_TOKEN || 'your-coze-token-here',
+  botId: import.meta.env.VITE_COZE_BOT_ID || 'your-bot-id-here',
 };
 
 interface CozeMessage {
