@@ -38,9 +38,11 @@ jobs:
         run: npx electron-builder build --win --x64 --publish=never
 
       - name: Upload to Release
-        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = '${{ github.ref_name }}'
           $exists = gh release view $tag 2>$null
           if (-not $exists) {
             Write-Host "Creating release $tag..."
@@ -48,9 +50,7 @@ jobs:
           } else {
             Write-Host "Release $tag already exists, uploading assets..."
           }
-          Get-ChildItem -Path "release" -Include "*.exe","*.exe.blockmap","latest.yml" | ForEach-Object {
-            Write-Host "Uploading $($_.Name)..."
-            gh release upload $tag "$($_.FullName)" --clobber
+          Get-ChildItem -Path release -Include *.exe,*.exe.blockmap,latest.yml | ForEach-Object {
+            Write-Host "Uploading: $($_.Name)"
+            gh release upload $tag $_.FullName --clobber
           }
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
