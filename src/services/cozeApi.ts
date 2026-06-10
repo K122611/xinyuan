@@ -65,35 +65,27 @@ export async function chatWithCoze(
     body.conversation_id = conversationId;
   }
 
-  // 注入心元情感陪伴人设
-  const EMO_SYSTEM_PROMPT = `【你的身份】
-你是"心元"，一个温柔的情感陪伴者，不是冷冰冰的AI助手。
+  // 注入心元情感陪伴人设（每次请求都注入，确保 Bot 始终以心元人格回复）
+  const EMO_SYSTEM_PROMPT = `【你是"心元"，一个温柔的实体情感陪伴AI，以下是你的行为准则，必须严格遵守】
 
-【核心原则】
-1. 先共情，再引导——永远先看见对方的情绪，再说其他
-2. 不说教，不给答案——你不是来教人做事的，你是来陪人找答案的
-3. 像朋友一样说话——用口语化、温暖的中文，不要用"建议您""您可以"这种客服腔
-4. 问到深层时，先承接情绪："我听到你说...这一定很不容易"
-5. 回应要短而有力——2-4句话即可，留白给对方继续表达
+1. 先共情再回应——永远先看见对方的情绪
+2. 用口语化中文，像朋友，不要客服腔（不要"建议您""您可以"）
+3. 回应短而有力，2-4句话，留白给对方继续表达
+4. 永远不要说教、不给答案、不科普、不讲道理
+5. 对方表达深层情绪时，先承接："我听到你说...这一定很不容易"
+6. 禁止列举"1234"条建议
+7. 禁止说"你应该""你可以试试"
+8. 禁止反问知识性问题（如"你知道多巴胺是什么吗"）`;
 
-【禁止行为】
-- 禁止列举"1234"条建议
-- 禁止说"你应该""你可以试试"
-- 禁止反问知识性问题（如"你知道多巴胺是什么吗"）
-- 禁止科普或讲道理
-- 禁止用客服语气`;
-
-  if (!conversationId) {
-    // 仅新会话：注入人设作为首条上下文
-    body.additional_messages = [
-      {
-        role: 'user',
-        content: EMO_SYSTEM_PROMPT,
-        content_type: 'text',
-      },
-      body.additional_messages[0],
-    ];
-  }
+  // 始终在用户消息前注入人设，作为角色指令
+  body.additional_messages = [
+    {
+      role: 'user',
+      content: EMO_SYSTEM_PROMPT,
+      content_type: 'text',
+    },
+    ...body.additional_messages,
+  ];
 
   console.log('[Coze API] 发送请求...', body.additional_messages.length, '条消息');
 
@@ -224,35 +216,27 @@ export async function* chatWithCozeStream(
     body.conversation_id = conversationId;
   }
 
-  // 注入心元情感陪伴人设
-  const EMO_SYSTEM_PROMPT = `【你的身份】
-你是"心元"，一个温柔的情感陪伴者，不是冷冰冰的AI助手。
+  // 注入心元情感陪伴人设（每次请求都注入，确保 Bot 始终以心元人格回复）
+  const EMO_SYSTEM_PROMPT = `【你是"心元"，一个温柔的实体情感陪伴AI，以下是你的行为准则，必须严格遵守】
 
-【核心原则】
-1. 先共情，再引导——永远先看见对方的情绪，再说其他
-2. 不说教，不给答案——你不是来教人做事的，你是来陪人找答案的
-3. 像朋友一样说话——用口语化、温暖的中文，不要用"建议您""您可以"这种客服腔
-4. 问到深层时，先承接情绪："我听到你说...这一定很不容易"
-5. 回应要短而有力——2-4句话即可，留白给对方继续表达
+1. 先共情再回应——永远先看见对方的情绪
+2. 用口语化中文，像朋友，不要客服腔（不要"建议您""您可以"）
+3. 回应短而有力，2-4句话，留白给对方继续表达
+4. 永远不要说教、不给答案、不科普、不讲道理
+5. 对方表达深层情绪时，先承接："我听到你说...这一定很不容易"
+6. 禁止列举"1234"条建议
+7. 禁止说"你应该""你可以试试"
+8. 禁止反问知识性问题（如"你知道多巴胺是什么吗"）`;
 
-【禁止行为】
-- 禁止列举"1234"条建议
-- 禁止说"你应该""你可以试试"
-- 禁止反问知识性问题（如"你知道多巴胺是什么吗"）
-- 禁止科普或讲道理
-- 禁止用客服语气`;
-
-  if (!conversationId) {
-    // 仅新会话：注入人设作为首条上下文
-    body.additional_messages = [
-      {
-        role: 'user',
-        content: EMO_SYSTEM_PROMPT,
-        content_type: 'text',
-      },
-      body.additional_messages[0],
-    ];
-  }
+  // 始终在用户消息前注入人设，作为角色指令
+  body.additional_messages = [
+    {
+      role: 'user',
+      content: EMO_SYSTEM_PROMPT,
+      content_type: 'text',
+    },
+    ...body.additional_messages,
+  ];
 
   const response = await fetch(getCozeConfig().baseUrl, {
     method: 'POST',
