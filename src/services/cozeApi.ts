@@ -1,5 +1,5 @@
 // Coze API v3 接口服务
-// bot_id: 7647439577560727552
+// bot_id: 7649689722696237091
 
 import { useCozeConfigStore } from '@/store';
 
@@ -11,8 +11,8 @@ function getCozeConfig(): { baseUrl: string; token: string; botId: string } {
   // 内置默认凭据：开箱即用，无需用户配置
   return {
     baseUrl: 'https://api.coze.cn/v3/chat',
-    token: 'pat_FkImL7mNAefU1MXLUbmwu5DrGKT6q07kzfemXqsIjJA82XZpZjlkcyXgzrOEuzR1',
-    botId: '7647439577560727552',
+    token: 'pat_CyuRGR2Jl8sCA5z9ExlK1leDoDsT04sDkegNp7ziiMRKEATt1uJgNCpIjFsZ8koZ',
+    botId: '7649689722696237091',
   };
 }
 
