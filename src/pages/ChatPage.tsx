@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useAppStore, useChatStore, useEmotionStore, usePetStore, useMilestoneStore } from '@/store';
 import { chatWithCoze } from '@/services/cozeApi';
+import { petIPC } from '@/services/petIPC';
 
 export function ChatPage() {
   const currentSessionId = useAppStore((s) => s.currentSessionId);
@@ -146,6 +147,18 @@ export function ChatPage() {
         emotion_label: emotion.label,
       };
       addMessage(aiMsg);
+
+      // 方案A：AI回复后通知宠物
+      const petEmotionLabel = emotion.label === '平和' ? '温暖' : emotion.label;
+      usePetStore.getState().notifyPet(
+        result.content.slice(0, 40),
+        petEmotionLabel,
+        'ai'
+      );
+      petIPC.sendToPet('speech_bubble', {
+        text: result.content.slice(0, 30),
+        emotion: petEmotionLabel,
+      });
     } catch (err) {
       console.warn('[ChatPage] Coze API 调用失败，使用本地模板回复:', err);
       // 降级到本地模板回复
@@ -159,6 +172,13 @@ export function ChatPage() {
         emotion_label: emotion.label,
       };
       addMessage(aiMsg);
+
+      // 降级回复也通知宠物
+      usePetStore.getState().notifyPet(response.slice(0, 40), emotion.label, 'ai');
+      petIPC.sendToPet('speech_bubble', {
+        text: response.slice(0, 30),
+        emotion: emotion.label,
+      });
     }
 
     setLoading(false);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useMemoryStore } from '@/store';
+import { useMemoryStore, usePetStore } from '@/store';
 
 const typeConfig: Record<string, { icon: string; color: string; label: string }> = {
   event:   { icon: '📌', color: '#60b0d0', label: '事件' },
@@ -31,6 +31,17 @@ export function MemoryWall() {
     };
     
     useMemoryStore.getState().addAnchor(anchor);
+    // 方案C：记录记忆里程碑时萌宠反应
+    if (form.type === 'milestone' || form.importance >= 7) {
+      usePetStore.getState().showSpeechBubble(
+        `🌟 你记录了一个重要时刻：「${form.title}」`,
+        '喜悦',
+        'system'
+      );
+      usePetStore.getState().addExperience(15);
+    } else {
+      usePetStore.getState().addExperience(3);
+    }
     setForm({ type: 'feeling', title: '', content: '', emotion: '', importance: 5 });
     setShowAddForm(false);
   };

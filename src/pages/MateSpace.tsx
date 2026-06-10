@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useMateStore } from '@/store';
+import { useMateStore, usePetStore } from '@/store';
 
 const matchModes = [
   { id: 'resonance', label: '共鸣搭子', icon: '🫂', desc: '与你有相似情绪状态的同行者', color: '#60b0d0' },
@@ -44,6 +44,13 @@ export function MateSpace() {
       mateNickname: foundMate.nickname,
       matchMode: selectedMode,
     });
+    // 方案C：匹配搭子时通知萌宠
+    usePetStore.getState().showSpeechBubble(
+      `🎉 找到了新搭子「${foundMate.nickname}」！`,
+      '开心',
+      'system'
+    );
+    usePetStore.getState().triggerReaction('sparkle');
     setShowMatchModal(false);
     setFoundMate(null);
   };
@@ -59,6 +66,8 @@ export function MateSpace() {
     await new Promise(r => setTimeout(r, 1500));
     const reply = { id: (Date.now() + 1).toString(), match_id: activeMatchId, sender_role: 'mate', content: '嗯，我能理解你的感受...' };
     addMessage(reply);
+    // 方案C：搭子回复时萌宠反应
+    usePetStore.getState().showSpeechBubble('💬 你的搭子回复了~', '温暖', 'ai');
   };
 
   const activeMatch = matches.find(m => m.id === activeMatchId);

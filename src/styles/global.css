@@ -283,3 +283,126 @@ body {
 .float {
   animation: float 3s ease-in-out infinite;
 }
+
+/* ===== 宠物反应动画（方案A） ===== */
+@keyframes petNod {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg); }
+  75% { transform: rotate(8deg); }
+}
+
+@keyframes petHeartbeat {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.25); }
+  60% { transform: scale(0.95); }
+  80% { transform: scale(1.1); }
+}
+
+@keyframes petWiggle {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+@keyframes petShake {
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(-8px); }
+  20% { transform: translateX(8px); }
+  30% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  50% { transform: translateX(-4px); }
+  60% { transform: translateX(4px); }
+  70% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+@keyframes petSway {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  50% { transform: rotate(0deg); }
+  75% { transform: rotate(5deg); }
+}
+
+@keyframes petJump {
+  0%, 100% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-20px) scale(1.1); }
+  60% { transform: translateY(-8px) scale(1.05); }
+  80% { transform: translateY(0) scale(0.95); }
+}
+
+@keyframes petSparkle {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 10px transparent); }
+  50% { filter: brightness(1.5) drop-shadow(0 0 25px rgba(255,220,100,0.6)); }
+}
+
+/* ===== 气泡动画 ===== */
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.9); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@keyframes bubbleOut {
+  from { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  to { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.9); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+/* ===== 宠物气泡（花园内） ===== */
+.pet-speech-bubble {
+  animation: bubbleIn 0.3s ease-out;
+}
+
+/* ===== 悬浮宠物窗口（方案B） ===== */
+.floating-pet-window {
+  background: transparent !important;
+  -webkit-app-region: drag;
+}
+
+.floating-pet-container {
+  -webkit-app-region: no-drag;
+  cursor: grab;
+}
+
+.floating-pet-container:active {
+  cursor: grabbing;
+}
+
+.floating-pet-body {
+  animation: float 3s ease-in-out infinite;
+  transition: transform 0.3s ease, filter 0.5s ease;
+}
+
+.floating-speech-bubble {
+  animation: bubbleIn 0.3s ease-out;
+  pointer-events: auto;
+}
+
+/* 悬浮窗透明窗口完全透明背景 */
+body.floating-pet-window {
+  background: transparent !important;
+}
+
+/* ===== 反应标签动画 ===== */
+.reaction-label {
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* ===== 悬浮宠物提示文字 ===== */
+.floating-pet-hint {
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+
+.floating-pet-container:hover .floating-pet-hint {
+  opacity: 0.5;
+}
+
+/* ===== 心情标签动画 ===== */
+.floating-mood-label {
+  transition: all 0.4s ease;
+  text-shadow: 0 0 12px currentColor;
+}

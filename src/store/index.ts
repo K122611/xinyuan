@@ -27,6 +27,11 @@ interface AppState {
   setUserNickname: (name: string) => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  // 方案B：悬浮窗
+  petWindowVisible: boolean;
+  togglePetWindow: () => void;
+  isElectron: boolean;
+  setIsElectron: (v: boolean) => void;
   // Coze 会话ID映射: session_id -> coze conversation_id
   cozeConvMap: Record<string, string>;
   setCozeConvId: (sessionId: string, convId: string) => void;
@@ -61,6 +66,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ cozeConvMap: map });
   },
   getCozeConvId: (sessionId) => get().cozeConvMap[sessionId],
+  // 方案B：悬浮窗控制
+  petWindowVisible: false,
+  togglePetWindow: () => {
+    const visible = !get().petWindowVisible;
+    set({ petWindowVisible: visible });
+    // 通过 IPC 通知 Electron 主进程
+    if (typeof window !== 'undefined' && (window as any).petAPI) {
+      if (visible) {
+        (window as any).petAPI.showPet();
+      } else {
+        (window as any).petAPI.hidePet();
+      }
+    }
+  },
+  isElectron: false,
+  setIsElectron: (v) => set({ isElectron: v }),
 }));
 
 // ============ Coze 配置 Store ============
@@ -175,21 +196,53 @@ export const useChatStore = create<ChatState>((set, get) => ({
 }));
 
 // ============ 萌宠 Store ============
+type ReactionType = 'none' | 'nod' | 'heart' | 'hug' | 'surprise' | 'comfort' | 'cheer' | 'sparkle';
+
+interface SpeechBubble {
+  text: string;
+  emotion: string;
+  visible: boolean;
+  timestamp: number;
+  source: 'ai' | 'system' | 'greeting';
+  type?: string; // 'reaction' | 'greeting' | 'milestone'
+}
+
 interface PetState {
   pet: { mood: string; energy: number; level: number; exp: number; skin: string };
   isAnimating: boolean;
+  reaction: ReactionType;
+  speechBubble: SpeechBubble | null;
+  greetingQueue: string[];
+  hasGreetedToday: boolean;
+  lastInteraction: number;
   loadPet: () => void;
   feedPet: () => void;
   setPetMood: (mood: string) => void;
+  // 方案A/B/C 新增方法
+  notifyPet: (text: string, emotion: string, source?: 'ai' | 'system' | 'greeting') => void;
+  showSpeechBubble: (text: string, emotion: string, source?: string) => void;
+  hideSpeechBubble: () => void;
+  triggerReaction: (reaction: ReactionType) => void;
+  addExperience: (amount: number) => void;
+  queueGreeting: (text: string) => void;
+  markGreeted: () => void;
+  resetGreetingTimer: () => void;
 }
 
 export const usePetStore = create<PetState>((set, get) => ({
   pet: storage.get('pet', { mood: 'calm', energy: 7, level: 1, exp: 0, skin: 'default' }),
   isAnimating: false,
+  reaction: 'none' as ReactionType,
+  speechBubble: null,
+  greetingQueue: [],
+  hasGreetedToday: storage.get('hasGreetedToday', false),
+  lastInteraction: storage.get('lastInteraction', Date.now()),
 
   loadPet: () => {
     const pet = storage.get('pet', { mood: 'calm', energy: 7, level: 1, exp: 0, skin: 'default' });
-    set({ pet });
+    const hasGreetedToday = storage.get('hasGreetedToday', false);
+    const lastInteraction = storage.get('lastInteraction', Date.now());
+    set({ pet, hasGreetedToday, lastInteraction });
   },
 
   feedPet: () => {
@@ -200,7 +253,8 @@ export const usePetStore = create<PetState>((set, get) => ({
       pet.level++;
     }
     storage.set('pet', pet);
-    set({ pet, isAnimating: true });
+    storage.set('lastInteraction', Date.now());
+    set({ pet, isAnimating: true, lastInteraction: Date.now() });
     setTimeout(() => set({ isAnimating: false }), 2000);
   },
 
@@ -208,6 +262,90 @@ export const usePetStore = create<PetState>((set, get) => ({
     const pet = { ...get().pet, mood };
     storage.set('pet', pet);
     set({ pet });
+  },
+
+  // ---- 方案A：AI回复实时气泡 ----
+  notifyPet: (text, emotion, source = 'ai') => {
+    // 提取关键情绪词作为气泡文本（限制15字）
+    const shortText = text.length > 25 ? text.slice(0, 25) + '...' : text;
+    get().showSpeechBubble(shortText, emotion, source);
+
+    // 根据情绪触发对应反应动画
+    const reactionMap: Record<string, ReactionType> = {
+      '开心': 'heart', '快乐': 'heart', '喜悦': 'sparkle', '高兴': 'cheer',
+      '难过': 'comfort', '悲伤': 'comfort', '低落': 'comfort',
+      '焦虑': 'nod', '紧张': 'nod', '不安': 'nod',
+      '惊讶': 'surprise', '震惊': 'surprise',
+      '温暖': 'hug', '感动': 'hug', '安慰': 'hug',
+    };
+    const reaction = reactionMap[emotion] || 'nod';
+    get().triggerReaction(reaction);
+
+    // 每次交流增加经验
+    get().addExperience(5);
+  },
+
+  showSpeechBubble: (text, emotion, source = 'ai') => {
+    const bubble: SpeechBubble = {
+      text, emotion, visible: true,
+      timestamp: Date.now(),
+      source: source as SpeechBubble['source'],
+    };
+    set({ speechBubble: bubble });
+    // 5秒后自动消失
+    setTimeout(() => {
+      const current = get().speechBubble;
+      if (current && current.timestamp === bubble.timestamp) {
+        set({ speechBubble: null });
+      }
+    }, 5000);
+  },
+
+  hideSpeechBubble: () => set({ speechBubble: null }),
+
+  triggerReaction: (reaction) => {
+    set({ reaction, isAnimating: true });
+    setTimeout(() => set({ reaction: 'none', isAnimating: false }), 3000);
+  },
+
+  addExperience: (amount) => {
+    const pet = { ...get().pet };
+    pet.exp += amount;
+    let leveledUp = false;
+    while (pet.exp >= pet.level * 100) {
+      pet.exp -= pet.level * 100;
+      pet.level++;
+      leveledUp = true;
+    }
+    storage.set('pet', pet);
+    set({ pet });
+    // 升级提示
+    if (leveledUp) {
+      get().showSpeechBubble(`🎉 升到 Lv.${pet.level} 啦！`, '喜悦', 'system');
+    }
+  },
+
+  // ---- 方案C：定时问候 ----
+  queueGreeting: (text) => {
+    set((s) => ({ greetingQueue: [...s.greetingQueue, text] }));
+  },
+
+  markGreeted: () => {
+    storage.set('hasGreetedToday', true);
+    set({ hasGreetedToday: true });
+  },
+
+  resetGreetingTimer: () => {
+    // 每天重置问候标记
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(8, 0, 0, 0); // 次日8点重置
+    const msUntilReset = tomorrow.getTime() - now.getTime();
+    setTimeout(() => {
+      set({ hasGreetedToday: false });
+      storage.set('hasGreetedToday', false);
+    }, msUntilReset);
   },
 }));
 
