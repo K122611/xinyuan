@@ -36,6 +36,24 @@ interface CozeResponse {
   };
 }
 
+// 从 Coze API v3 消息对象中提取纯文本内容（兼容 string / {text} / [{text}] 等格式）
+function extractContent(msg: any): string {
+  if (!msg) return '';
+  const c = msg.content;
+  if (typeof c === 'string') return c.trim();
+  if (c && typeof c === 'object') {
+    if (typeof c.text === 'string') return c.text.trim();
+    if (Array.isArray(c)) {
+      return c
+        .filter((b: any) => b.type === 'text' && typeof b.text === 'string')
+        .map((b: any) => b.text)
+        .join('')
+        .trim();
+    }
+  }
+  return '';
+}
+
 // 非流式调用 Coze API (带轮询)
 export async function chatWithCoze(
   userMessage: string,
@@ -173,12 +191,12 @@ export async function chatWithCoze(
     if (chatData.data.messages && chatData.data.messages.length > 0) {
       const assistantMsgs = chatData.data.messages.filter((m: any) => m.role === 'assistant');
       if (assistantMsgs.length > 0) {
-        content = assistantMsgs[assistantMsgs.length - 1].content;
+        content = extractContent(assistantMsgs[assistantMsgs.length - 1]);
       }
-    } else if (chatData.data.content) {
-      content = chatData.data.content;
-    } else if (chatData.data.answer) {
-      content = chatData.data.answer;
+    }
+    if (!content) {
+      // 兜底：从 data.content / data.answer 提取
+      content = extractContent(chatData.data);
     }
   }
 
@@ -281,7 +299,9 @@ export async function* chatWithCozeStream(
         if (data.conversation_id) convId = data.conversation_id;
 
         if (data.type === 'answer' && data.content) {
-          yield { chunk: data.content, done: false, conversationId: convId };
+          // Coze SSE content 偶尔也可能是对象格式
+          const text = typeof data.content === 'string' ? data.content : extractContent({ content: data.content });
+          if (text) yield { chunk: text, done: false, conversationId: convId };
         }
       } catch {
         // 跳过解析失败的行
@@ -310,7 +330,7 @@ export async function getCozeConversationHistory(conversationId: string): Promis
   if (data.code === 0 && data.data) {
     return data.data.map((m: any) => ({
       role: m.role,
-      content: m.content,
+      content: extractContent(m),
     }));
   }
   return [];
