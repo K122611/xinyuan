@@ -34,7 +34,23 @@ jobs:
       - name: Build Vite
         run: npx vite build
 
-      - name: Build Electron
-        run: npx electron-builder build --win --x64
+      - name: Build Electron (no publish)
+        run: npx electron-builder build --win --x64 --publish=never
+
+      - name: Upload to Release
+        shell: powershell
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $exists = gh release view $tag 2>$null
+          if (-not $exists) {
+            Write-Host "Creating release $tag..."
+            gh release create $tag --title "$tag" --notes "自动构建版本"
+          } else {
+            Write-Host "Release $tag already exists, uploading assets..."
+          }
+          Get-ChildItem -Path "release" -Include "*.exe","*.exe.blockmap","latest.yml" | ForEach-Object {
+            Write-Host "Uploading $($_.Name)..."
+            gh release upload $tag "$($_.FullName)" --clobber
+          }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
