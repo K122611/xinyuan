@@ -83,7 +83,9 @@ export function cleanContent(text: string): string {
   if (/^\s*\{["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null)(\s*,\s*["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null))*\s*\}\s*$/.test(text)) {
     return '';
   }
-  // 只移除独立成行（以换行开头）的末尾 JSON 对象，避免误删直接拼接在正文后的内容
+  // 🔑 移除 {"emotion":"..."} 之类的 JSON 块（直接删除，保留前后文字格式不变）
+  text = text.replace(/\s*\{["']emotion["']\s*:\s*"[^"]*"\s*\}\s*/g, '\n');
+  // 只移除独立成行（以换行开头）的末尾 JSON 对象
   text = text.replace(/\n\s*\{["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null)(\s*,\s*["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null))*\s*\}\s*$/g, '');
   // 移除 Markdown 代码块包裹的 JSON（通常是 Coze 工作流输出），保留其他代码块
   text = text.replace(/```json\s*[\s\S]*?\s*```/g, '');

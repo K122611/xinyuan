@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { usePetStore, SHOP_ITEMS } from '../store';
+import { petIPC } from '@/services/petIPC';
+import { PetAction, ACTION_VISUALS } from '@/utils/petActionParser';
 
 const PET_EMOJIS: Record<string, string> = {
   normal: '🐱', calm: '🐱',
@@ -33,6 +35,8 @@ export default function FloatingPetPage() {
   // ============ 从共享 Store 读取 ============
   const pet = usePetStore((s) => s.pet);
   const loadPet = usePetStore((s) => s.loadPet);
+  const targetAction = usePetStore((s) => s.targetAction);
+  const setTargetAction = usePetStore((s) => s.setTargetAction);
 
   // ============ 本地 UI 状态 ============
   const [entranceDone, setEntranceDone] = useState(false);
@@ -49,6 +53,28 @@ export default function FloatingPetPage() {
 
   // 启动时加载持久化 pet 数据
   useEffect(() => { loadPet(); }, []); // eslint-disable-line
+
+  // ============ IPC 监听：主窗口 → 宠物动作 ============
+  const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const unsub = petIPC.onMessage((msg) => {
+      if (msg.type === 'set_action') {
+        const action = msg.data?.action as PetAction;
+        if (action && ACTION_VISUALS[action]) {
+          setTargetAction(action);
+          // 瞬态动作自动重置为 idle
+          const visual = ACTION_VISUALS[action];
+          if (visual.duration > 0) {
+            if (actionTimer.current) clearTimeout(actionTimer.current);
+            actionTimer.current = setTimeout(() => {
+              setTargetAction('idle');
+            }, visual.duration);
+          }
+        }
+      }
+    });
+    return () => { unsub(); if (actionTimer.current) clearTimeout(actionTimer.current); };
+  }, [setTargetAction]);
 
   // ============ 入场动画 ============
   useEffect(() => {
@@ -115,6 +141,7 @@ export default function FloatingPetPage() {
   }, [scheduleWander]);
 
   // ============ 渲染 ============
+  const actionVisual = ACTION_VISUALS[targetAction] || ACTION_VISUALS.idle;
   const petEmoji = PET_EMOJIS[pet.mood] || PET_EMOJIS.normal;
   const emotionLabel = EMOTION_LABELS[pet.mood] || EMOTION_LABELS.normal;
   const energy = Math.round(localEnergy * 10); // 0-10 → 0-100
@@ -174,14 +201,16 @@ export default function FloatingPetPage() {
         >
           {/* 宠物本体 */}
           <div
+            className={targetAction !== 'idle' ? actionVisual.animationClass : ''}
             style={{
               fontSize: 32,
               lineHeight: 1,
-              filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+              filter: `drop-shadow(0 2px 6px ${actionVisual.color}44)`,
               marginBottom: 2,
+              transition: 'filter 0.5s',
             }}
           >
-            {petEmoji}
+            {targetAction !== 'idle' ? actionVisual.emoji : petEmoji}
           </div>
 
           {/* 装饰品 */}
@@ -194,17 +223,17 @@ export default function FloatingPetPage() {
             </div>
           )}
 
-          {/* 情绪标签 */}
+          {/* 情绪标签 + 动作标签 */}
           <div
             style={{
               fontSize: 11,
-              color: '#aaa',
+              color: targetAction !== 'idle' ? actionVisual.color : '#aaa',
               fontWeight: 500,
               lineHeight: 1,
               textShadow: '0 1px 2px rgba(0,0,0,0.4)',
             }}
           >
-            {emotionLabel}
+            {emotionLabel}{targetAction !== 'idle' ? ` · ${actionVisual.label}` : ''}
           </div>
 
           {/* 体力条 */}
@@ -284,6 +313,69 @@ export default function FloatingPetPage() {
         @keyframes bubbleIn {
           from { opacity: 0; transform: translateY(6px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 倾听：微微左右摆动耳朵 */
+        .anim-listening {
+          animation: anim-listening 1.2s ease-in-out infinite;
+        }
+        @keyframes anim-listening {
+          0%, 100% { transform: rotate(0deg) scale(1); }
+          25% { transform: rotate(-3deg) scale(1.02); }
+          75% { transform: rotate(3deg) scale(1.02); }
+        }
+
+        /* 安抚：轻柔上下浮动 */
+        .anim-comforting {
+          animation: anim-comforting 1.5s ease-in-out infinite;
+        }
+        @keyframes anim-comforting {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-6px) scale(1.05); }
+        }
+
+        /* 开心：跳动 */
+        .anim-happy {
+          animation: anim-happy 0.5s ease-in-out infinite;
+        }
+        @keyframes anim-happy {
+          0%, 100% { transform: translateY(0) scale(1); }
+          25% { transform: translateY(-10px) scale(1.1); }
+          50% { transform: translateY(0) scale(1.05); }
+          75% { transform: translateY(-5px) scale(1.08); }
+        }
+
+        /* 担心：左右轻微颤抖 */
+        .anim-worried {
+          animation: anim-worried 0.6s ease-in-out infinite;
+        }
+        @keyframes anim-worried {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-3px); }
+          75% { transform: translateX(3px); }
+        }
+
+        /* 呼吸引导：规律缩放 */
+        .anim-breathing {
+          animation: anim-breathing 4s ease-in-out infinite;
+        }
+        @keyframes anim-breathing {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.15); opacity: 0.85; }
+        }
+
+        /* 危机：快速脉冲 */
+        .anim-crisis {
+          animation: anim-crisis 0.8s ease-in-out infinite;
+        }
+        @keyframes anim-crisis {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.2); opacity: 0.7; }
+        }
+
+        /* 待机：无动画 */
+        .anim-idle {
+          animation: none;
         }
       `}</style>
     </div>

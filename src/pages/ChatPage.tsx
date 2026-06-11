@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useAppStore, useChatStore, useEmotionStore, usePetStore, useMilestoneStore } from '@/store';
 import { chatWithCoze, chatWithCozeStream, cleanContent } from '@/services/cozeApi';
 import { petIPC } from '@/services/petIPC';
+import { parsePetAction } from '@/utils/petActionParser';
 
 export function ChatPage() {
   const currentSessionId = useAppStore((s) => s.currentSessionId);
@@ -169,13 +170,20 @@ export function ChatPage() {
       fullContent = cleanContent(fullContent) || fullContent;
       updateMessage(aiMsgId, fullContent);
 
+      // 🎬 解析文本中的动作关键词，驱动宠物动画
+      const actionResult = parsePetAction(fullContent);
+      petIPC.sendToPet({ type: 'set_action', data: {
+        action: actionResult.action,
+        keyword: actionResult.keyword,
+      }});
+
       // 通知宠物
       const petEmotionLabel = emotion.label === '平和' ? '温暖' : emotion.label;
       usePetStore.getState().notifyPet(fullContent.slice(0, 40) || '心元感受到了你的情绪…', petEmotionLabel, 'ai');
-      petIPC.sendToPet('speech_bubble', {
+      petIPC.sendToPet({ type: 'speech_bubble', data: {
         text: fullContent.slice(0, 30) || '心元感受到了你的情绪…',
         emotion: petEmotionLabel,
-      });
+      }});
     } catch (err) {
       console.error('[ChatPage] ❌ 流式 API 失败 | 错误:', (err as Error).message);
       console.error('[ChatPage] ℹ️ 当前 cozeConvId:', appStore.getCozeConvId(sessionId));
@@ -183,12 +191,19 @@ export function ChatPage() {
       const response = generateResponse(text, emotion);
       updateMessage(aiMsgId, response);
 
+      // 🎬 降级回复也解析动作
+      const fallbackAction = parsePetAction(response);
+      petIPC.sendToPet({ type: 'set_action', data: {
+        action: fallbackAction.action,
+        keyword: fallbackAction.keyword,
+      }});
+
       // 降级回复也通知宠物
       usePetStore.getState().notifyPet(response.slice(0, 40), emotion.label, 'ai');
-      petIPC.sendToPet('speech_bubble', {
+      petIPC.sendToPet({ type: 'speech_bubble', data: {
         text: response.slice(0, 30),
         emotion: emotion.label,
-      });
+      }});
     }
 
     setLoading(false);

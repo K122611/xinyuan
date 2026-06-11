@@ -1,0 +1,13 @@
+=== 测试1: 发送第1条消息 ===
+code: 4101 status: undefined
+convId:  chatId: 
+轮询等待...
+
+=== 测试2: 续聊（第2条消息）→ 关键！ ===
+code: 4101 status: undefined
+新chatId: 
+
+=== 测试3: message/list?conversation_id → 全量消息 ===
+code: 700012006 消息数: undefined
+
+=== 对比：旧方式（过滤所有 answer 并 join）===

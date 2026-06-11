@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
+import type { PetAction } from '@/utils/petActionParser';
 
 // ============ 简易本地存储适配器（按用户隔离） ============
 let _getAuthUserId: (() => string) | null = null;
@@ -273,6 +274,7 @@ interface PetState {
   greetingQueue: string[];
   hasGreetedToday: boolean;
   lastInteraction: number;
+  targetAction: PetAction;
   loadPet: () => void;
   feedPet: () => void;
   setPetMood: (mood: string) => void;
@@ -288,6 +290,7 @@ interface PetState {
   queueGreeting: (text: string) => void;
   markGreeted: () => void;
   resetGreetingTimer: () => void;
+  setTargetAction: (action: PetAction) => void;
 }
 
 export const usePetStore = create<PetState>((set, get) => ({
@@ -298,6 +301,7 @@ export const usePetStore = create<PetState>((set, get) => ({
   greetingQueue: [],
   hasGreetedToday: storage.get('hasGreetedToday', false),
   lastInteraction: storage.get('lastInteraction', Date.now()),
+  targetAction: 'idle' as PetAction,
 
   loadPet: () => {
     const pet = storage.get('pet', { mood: 'calm', energy: 7, level: 1, exp: 0, skin: 'default', accessories: [] });
@@ -427,6 +431,10 @@ export const usePetStore = create<PetState>((set, get) => ({
       set({ hasGreetedToday: false });
       storage.set('hasGreetedToday', false);
     }, msUntilReset);
+  },
+
+  setTargetAction: (action: PetAction) => {
+    set({ targetAction: action });
   },
 }));
 
