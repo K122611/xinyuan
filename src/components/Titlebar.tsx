@@ -1,6 +1,9 @@
 import React from 'react';
+import { useAuthStore } from '@/store/authStore';
 
 export function Titlebar() {
+  const { username, logout } = useAuthStore();
+
   return (
     <div className="titlebar">
       <div className="titlebar-left">
@@ -10,8 +13,31 @@ export function Titlebar() {
           V1.0 MVP
         </span>
       </div>
-      <div className="titlebar-controls">
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 8px' }}>
+      <div className="titlebar-controls" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {username && (
+          <>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              👤 {username}
+            </span>
+            <button
+              onClick={logout}
+              title="登出"
+              style={{
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                padding: '2px 10px',
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              登出
+            </button>
+          </>
+        )}
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
           🌐 浏览器预览模式
         </span>
       </div>

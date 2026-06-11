@@ -1,16 +1,26 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 
-// ============ 简易本地存储适配器 ============
+// ============ 简易本地存储适配器（按用户隔离） ============
+let _getAuthUserId: (() => string) | null = null;
+
+/** 注入获取当前用户ID的方法（由 authStore 在 init 时调用） */
+export function injectAuthUserIdGetter(getter: () => string) {
+  _getAuthUserId = getter;
+}
+
 const storage = {
+  getUserId(): string {
+    return _getAuthUserId?.() || 'anonymous';
+  },
   get(key: string, fallback: any = null) {
     try {
-      const raw = localStorage.getItem(`xinyuan_${key}`);
+      const raw = localStorage.getItem(`xinyuan_${this.getUserId()}_${key}`);
       return raw ? JSON.parse(raw) : fallback;
     } catch { return fallback; }
   },
   set(key: string, value: any) {
-    try { localStorage.setItem(`xinyuan_${key}`, JSON.stringify(value)); } catch {}
+    try { localStorage.setItem(`xinyuan_${this.getUserId()}_${key}`, JSON.stringify(value)); } catch {}
   },
 };
 

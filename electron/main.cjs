@@ -219,7 +219,7 @@ function setupIPC() {
 app.whenReady().then(() => {
   setupIPC();
   createMainWindow();
-  createPetWindow();
+  // 桌宠窗口延迟创建：等用户认证后由渲染进程触发
   createTray();
 });
 
