@@ -17,7 +17,6 @@ ipcRenderer.on('pet:message', (_event, message) => {
 });
 
 ipcRenderer.on('pet:state-update', (_event, petState) => {
-  // 宠物状态同步，转发给页面
   petMessageListeners.forEach((fn) => {
     try { fn({ type: 'sync_pet_state', payload: petState, timestamp: Date.now() }); } catch {}
   });
@@ -29,6 +28,13 @@ contextBridge.exposeInMainWorld('petAPI', {
   closePet: () => ipcRenderer.invoke('pet:close'),
   togglePet: () => ipcRenderer.invoke('pet:toggle'),
   isVisible: () => ipcRenderer.invoke('pet:is-visible'),
+
+  // 宠物窗口位置
+  getBounds: () => ipcRenderer.invoke('pet:get-bounds'),
+  setBounds: (bounds) => ipcRenderer.invoke('pet:set-bounds', bounds),
+
+  // 鼠标穿透切换（hover 宠物身体时允许点击）
+  allowClick: (allow) => ipcRenderer.invoke('pet:allow-click', !!allow),
 
   // 向另一个窗口发送宠物消息
   sendToPet: (message) => ipcRenderer.invoke('pet:send-message', message),
@@ -47,4 +53,12 @@ contextBridge.exposeInMainWorld('petAPI', {
   // 窗口控制
   dragStart: () => ipcRenderer.send('pet:drag-start'),
   doubleClick: () => ipcRenderer.send('pet:dblclick'),
+});
+
+// ============ 主窗口 API ============
+contextBridge.exposeInMainWorld('mainAPI', {
+  show: () => ipcRenderer.invoke('main:show'),
+  hide: () => ipcRenderer.invoke('main:hide'),
+  isVisible: () => ipcRenderer.invoke('main:is-visible'),
+  quit: () => ipcRenderer.invoke('app:quit'),
 });

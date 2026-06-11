@@ -36,6 +36,10 @@ interface AppState {
   cozeConvMap: Record<string, string>;
   setCozeConvId: (sessionId: string, convId: string) => void;
   getCozeConvId: (sessionId: string) => string | undefined;
+  // Coze 初始 chat_id 映射: session_id -> 首次 chat_id（用于后续轮询）
+  cozeChatMap: Record<string, string>;
+  setCozeChatId: (sessionId: string, chatId: string) => void;
+  getCozeChatId: (sessionId: string) => string | undefined;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -66,6 +70,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ cozeConvMap: map });
   },
   getCozeConvId: (sessionId) => get().cozeConvMap[sessionId],
+
+  cozeChatMap: storage.get('cozeChatMap', {}),
+  setCozeChatId: (sessionId, chatId) => {
+    const map = { ...get().cozeChatMap, [sessionId]: chatId };
+    storage.set('cozeChatMap', map);
+    set({ cozeChatMap: map });
+  },
+  getCozeChatId: (sessionId) => get().cozeChatMap[sessionId],
   // 方案B：悬浮窗控制
   petWindowVisible: false,
   togglePetWindow: () => {

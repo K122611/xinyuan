@@ -2,231 +2,128 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { usePetStore } from '../store';
 import { petIPC, PetMessage } from '../services/petIPC';
 
-// ============ 情绪映射 ============
-const moodEmoji: Record<string, string> = {
-  calm: '😊', anxious: '😰', sad: '😢', joyful: '🥳',
-  sleepy: '😴', angry: '😠', happy: '😄', excited: '🤩',
+// ============ 情绪与表情映射 ============
+const emotionMap: Record<string, string> = {
+  happy: '😊', excited: '🤩', calm: '😌', neutral: '😶',
+  sad: '😢', tired: '😴', anxious: '😰', angry: '😤',
+  loved: '🥰', playful: '😜', curious: '🤔',
+};
+const emotionLabels: Record<string, string> = {
+  happy: '开心', excited: '兴奋', calm: '平静', neutral: '普通',
+  sad: '难过', tired: '疲惫', anxious: '焦虑', angry: '生气',
+  loved: '被爱', playful: '调皮', curious: '好奇',
 };
 
-const moodColors: Record<string, { bg: string; glow: string }> = {
-  calm: { bg: '#6ec6ff', glow: 'rgba(110,198,255,0.4)' },
-  anxious: { bg: '#ffc107', glow: 'rgba(255,193,7,0.4)' },
-  sad: { bg: '#90a4ae', glow: 'rgba(144,164,174,0.4)' },
-  joyful: { bg: '#ff69b4', glow: 'rgba(255,105,180,0.4)' },
-  sleepy: { bg: '#7c4dff', glow: 'rgba(124,77,255,0.4)' },
-  angry: { bg: '#ef5350', glow: 'rgba(239,83,80,0.4)' },
-  happy: { bg: '#4caf50', glow: 'rgba(76,175,80,0.4)' },
-  excited: { bg: '#ff9800', glow: 'rgba(255,152,0,0.4)' },
-};
-
-// 反应动画映射
-const reactionAnimations: Record<string, string> = {
-  nod: 'animate-bounce',
-  heart: 'animate-heartbeat',
-  hug: 'animate-wiggle',
-  surprise: 'animate-shake',
-  comfort: 'animate-sway',
-  cheer: 'animate-jump',
-  sparkle: 'animate-sparkle',
-};
-
-// ============ 悬浮宠物气泡 ============
-const SpeechBubble: React.FC<{
-  text: string;
-  emotion: string;
-  visible: boolean;
-  onDismiss: () => void;
-}> = ({ text, emotion, visible, onDismiss }) => {
-  if (!visible || !text) return null;
-
-  const color = moodColors[emotion] || moodColors.calm;
-
-  return (
-    <div
-      className="floating-speech-bubble"
-      onClick={onDismiss}
-      style={{
-        position: 'absolute',
-        bottom: '100%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        marginBottom: 12,
-        background: 'rgba(20,20,35,0.92)',
-        backdropFilter: 'blur(12px)',
-        border: `1px solid ${color.glow}`,
-        borderRadius: 16,
-        padding: '8px 14px',
-        maxWidth: 220,
-        minWidth: 80,
-        textAlign: 'center',
-        color: '#e8e8f0',
-        fontSize: 12,
-        lineHeight: 1.5,
-        zIndex: 100,
-        boxShadow: `0 0 16px ${color.glow}, 0 4px 12px rgba(0,0,0,0.5)`,
-        cursor: 'pointer',
-        animation: 'bubbleIn 0.3s ease-out',
-        pointerEvents: 'auto',
-      }}
-    >
-      <div style={{ marginBottom: 4 }}>{text}</div>
-      <div
-        style={{
-          position: 'absolute',
-          bottom: -6,
-          left: '50%',
-          transform: 'translateX(-50%) rotate(45deg)',
-          width: 12,
-          height: 12,
-          background: 'rgba(20,20,35,0.92)',
-          borderRight: `1px solid ${color.glow}`,
-          borderBottom: `1px solid ${color.glow}`,
-        }}
-      />
-    </div>
-  );
-};
-
-// ============ 主组件 ============
+// ============ 桌宠组件 ============
 const FloatingPetPage: React.FC = () => {
-  const [speechBubble, setSpeechBubble] = useState<{ text: string; emotion: string } | null>(null);
-  const [reaction, setReaction] = useState('');
-  const [petPos, setPetPos] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
+  const [mood, setMood] = useState('neutral');
+  const [energy, setEnergy] = useState(80);
+  const [exp, setExp] = useState(0);
+  const [level, setLevel] = useState(1);
+  const [speechBubble, setSpeechBubble] = useState<string | null>(null);
+  const [bubbleTimeout, setBubbleTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+
+  // 动画状态
+  const [entranceDone, setEntranceDone] = useState(false);
+  const [wandering, setWandering] = useState(false);
+  const [wanderX, setWanderX] = useState(0);
+  const [wanderY, setWanderY] = useState(0);
+  const [petted, setPetted] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const wanderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleAnimFrame = useRef<number>(0);
 
-  const pet = usePetStore((s) => s.pet);
-  const loadPet = usePetStore((s) => s.loadPet);
+  // ============ 工具函数 ============
+  const showBubble = useCallback((text: string, duration = 3500) => {
+    if (bubbleTimeout) clearTimeout(bubbleTimeout);
+    setSpeechBubble(text);
+    const t = setTimeout(() => setSpeechBubble(null), duration);
+    setBubbleTimeout(t);
+  }, [bubbleTimeout]);
 
-  // 初始加载
-  useEffect(() => {
-    loadPet();
+  const changeMood = useCallback((newMood: string) => {
+    setMood(newMood);
+    setTimeout(() => setMood('neutral'), 8000);
   }, []);
 
-  // 监听来自主窗口的消息
+  // ============ 消息监听 ============
   useEffect(() => {
-    const unsub = petIPC.onMessage((msg: PetMessage) => {
+    const handler = (msg: PetMessage) => {
       switch (msg.type) {
-        case 'speech_bubble':
-          setSpeechBubble({
-            text: msg.payload.text,
-            emotion: msg.payload.emotion,
-          });
-          // 自动消失
-          setTimeout(() => setSpeechBubble(null), 5000);
+        case 'emotion':
+          changeMood(msg.payload?.emotion || msg.payload?.mood || 'neutral');
+          if (msg.payload?.message) showBubble(msg.payload.message);
           break;
-
-        case 'reaction':
-          setReaction(msg.payload.reaction);
-          setTimeout(() => setReaction(''), 3000);
+        case 'chat_sync':
+          showBubble(msg.payload || '我在听...');
+          changeMood('curious');
           break;
-
-        case 'mood_update':
-          usePetStore.getState().setPetMood(msg.payload.mood);
-          break;
-
         case 'sync_pet_state':
           if (msg.payload) {
-            usePetStore.setState({ pet: msg.payload });
+            if (msg.payload.mood) setMood(msg.payload.mood);
+            if (msg.payload.energy !== undefined) setEnergy(msg.payload.energy);
+            if (msg.payload.exp !== undefined) setExp(msg.payload.exp);
+            if (msg.payload.level !== undefined) setLevel(msg.payload.level);
           }
           break;
-
-        case 'greeting':
-          setSpeechBubble({
-            text: msg.payload.text,
-            emotion: 'calm',
-          });
-          setTimeout(() => setSpeechBubble(null), 6000);
+        case 'heartbeat':
           break;
+        default:
+          if (typeof msg.payload === 'string') showBubble(msg.payload);
       }
-    });
-
-    // localStorage 轮询（非 Electron 环境回退）
-    let lastMsgTime = 0;
-    const poll = setInterval(() => {
-      try {
-        const raw = localStorage.getItem('xinyuan_pet_msg');
-        if (raw) {
-          const msg = JSON.parse(raw) as PetMessage & { timestamp: number };
-          if (msg.timestamp > lastMsgTime) {
-            lastMsgTime = msg.timestamp;
-            if (msg.type === 'speech_bubble') {
-              setSpeechBubble({
-                text: msg.payload.text,
-                emotion: msg.payload.emotion,
-              });
-              setTimeout(() => setSpeechBubble(null), 5000);
-            } else if (msg.type === 'reaction') {
-              setReaction(msg.payload.reaction);
-              setTimeout(() => setReaction(''), 3000);
-            }
-          }
-        }
-      } catch {}
-    }, 1000);
-
-    return () => {
-      unsub?.();
-      clearInterval(poll);
     };
+
+    petIPC.onMessage(handler);
+    return () => petIPC.removeListener(handler);
+  }, [changeMood, showBubble]);
+
+  // ============ 入场动画 ============
+  useEffect(() => {
+    setTimeout(() => setEntranceDone(true), 600);
   }, []);
 
-  // 拖拽处理
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button === 0) {
-      setDragging(true);
-      dragOffset.current = {
-        x: e.clientX - petPos.x,
-        y: e.clientY - petPos.y,
-      };
-      petIPC.showPet?.(); // 确保可见
-    }
-  }, [petPos]);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (dragging) {
-      setPetPos({
-        x: e.clientX - dragOffset.current.x,
-        y: e.clientY - dragOffset.current.y,
-      });
-    }
-  }, [dragging]);
-
-  const handleMouseUp = useCallback(() => {
-    setDragging(false);
-  }, []);
+  // ============ 随机闲逛 ============
+  const startWander = useCallback(() => {
+    if (wandering) return;
+    setWandering(true);
+    const dx = (Math.random() - 0.5) * 160;
+    const dy = (Math.random() - 0.5) * 100;
+    setWanderX(dx);
+    setWanderY(dy);
+    setTimeout(() => setWandering(false), 2000);
+  }, [wandering]);
 
   useEffect(() => {
-    if (dragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [dragging, handleMouseMove, handleMouseUp]);
+    // 每 8~18 秒随机闲逛一次
+    const schedule = () => {
+      const delay = 8000 + Math.random() * 10000;
+      wanderTimer.current = setTimeout(() => {
+        startWander();
+        schedule();
+      }, delay);
+    };
+    schedule();
+    return () => { if (wanderTimer.current) clearTimeout(wanderTimer.current); };
+  }, [startWander]);
 
-  // 双击回到主窗口
+  // ============ 双击 → 打开主窗口 ============
   const handleDoubleClick = useCallback(() => {
-    if ((window as any).petAPI) {
-      (window as any).petAPI.doubleClick();
-    }
-  }, []);
+    try { petIPC.doubleClick(); } catch {}
+    // 被双击时开心
+    changeMood('loved');
+    showBubble('来啦~');
+    setPetted(true);
+    setTimeout(() => setPetted(false), 1500);
+  }, [changeMood, showBubble]);
 
-  const emotionKey = pet?.mood || 'calm';
-  const emoji = moodEmoji[emotionKey] || '😊';
-  const colors = moodColors[emotionKey] || moodColors.calm;
-  const animClass = reaction ? reactionAnimations[reaction] || '' : '';
-  const energyPercent = ((pet?.energy || 7) / 10) * 100;
+  // ============ 渲染 ============
+  const emoji = emotionMap[mood] || emotionMap.neutral;
 
   return (
     <div
-      className="floating-pet-container"
       ref={containerRef}
-      onMouseDown={handleMouseDown}
-      onDoubleClick={handleDoubleClick}
       style={{
         width: '100vw',
         height: '100vh',
@@ -236,151 +133,143 @@ const FloatingPetPage: React.FC = () => {
         justifyContent: 'center',
         background: 'transparent',
         userSelect: 'none',
-        cursor: dragging ? 'grabbing' : 'grab',
-        position: 'relative',
-        overflow: 'hidden',
+        WebkitAppRegion: 'drag',
+        cursor: hovered ? 'pointer' : 'default',
+        transform: entranceDone
+          ? `translate(${wanderX}px, ${wanderY}px)`
+          : 'translateY(20px)',
+        transition: wandering
+          ? 'transform 1.8s cubic-bezier(0.34, 1.56, 0.64, 1)'
+          : 'transform 0.3s ease-out',
+        opacity: entranceDone ? 1 : 0,
       }}
     >
-      {/* 背景光晕 */}
+      {/* ===== 图标区 ===== */}
       <div
-        style={{
-          position: 'absolute',
-          width: 180,
-          height: 180,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${colors.glow} 0%, transparent 70%)`,
-          pointerEvents: 'none',
-          animation: 'glowPulse 2s ease-in-out infinite',
+        onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => {
+          setHovered(true);
+          try { petIPC.allowClick(true); } catch {}
         }}
-      />
-
-      {/* 等级 */}
-      <div
+        onMouseLeave={() => {
+          setHovered(false);
+          try { petIPC.allowClick(false); } catch {}
+        }}
         style={{
-          position: 'absolute',
-          top: 8,
-          right: 20,
-          background: 'rgba(20,20,35,0.75)',
-          backdropFilter: 'blur(6px)',
-          borderRadius: 10,
-          padding: '2px 10px',
-          fontSize: 11,
-          color: '#c9a0ff',
-          border: '1px solid rgba(201,160,255,0.3)',
-          zIndex: 10,
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 6,
+          padding: '8px 12px',
+          borderRadius: 20,
+          WebkitAppRegion: 'no-drag',
         }}
       >
-        Lv.{pet?.level || 1}
+        {/* 宠物表情 */}
+        <div
+          className="pet-body"
+          style={{
+            fontSize: petted ? 80 : 72,
+            filter: petted
+              ? 'drop-shadow(0 0 18px rgba(255, 182, 193, 0.9)) saturate(1.3)'
+              : 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))',
+            transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            transform: petted ? 'scale(1.15)' : 'scale(1)',
+            animation: 'float 3s ease-in-out infinite',
+            lineHeight: 1,
+          }}
+        >
+          {emoji}
+        </div>
+
+        {/* 情绪标签 */}
+        <span
+          style={{
+            fontSize: 12,
+            color: '#888',
+            opacity: 0.7,
+            fontWeight: 500,
+            transition: 'opacity 0.3s',
+          }}
+        >
+          {emotionLabels[mood] || '普通'}
+        </span>
+
+        {/* 能量条 */}
+        <div style={{ width: 100, height: 4, background: '#eee', borderRadius: 2, overflow: 'hidden' }}>
+          <div
+            style={{
+              width: `${Math.min(100, energy)}%`,
+              height: '100%',
+              background: energy > 30 ? '#7ecb76' : '#f5a623',
+              transition: 'width 0.5s ease',
+              borderRadius: 2,
+            }}
+          />
+        </div>
+
+        {/* 等级 + 经验 */}
+        <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#aaa' }}>
+          <span>Lv.{level}</span>
+          <span>EXP {exp % 100}/100</span>
+        </div>
       </div>
 
-      {/* 气泡 */}
+      {/* ===== 气泡 ===== */}
       {speechBubble && (
-        <SpeechBubble
-          text={speechBubble.text}
-          emotion={speechBubble.emotion}
-          visible={!!speechBubble}
-          onDismiss={() => setSpeechBubble(null)}
-        />
+        <div
+          className="pet-bubble"
+          style={{
+            position: 'absolute',
+            bottom: 10,
+            maxWidth: 220,
+            padding: '8px 14px',
+            background: 'rgba(255,255,255,0.92)',
+            borderRadius: 16,
+            fontSize: 13,
+            color: '#444',
+            lineHeight: 1.5,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+            animation: 'bubbleIn 0.3s ease-out',
+            textAlign: 'center',
+            wordBreak: 'break-word',
+            WebkitAppRegion: 'no-drag',
+          }}
+        >
+          {speechBubble}
+          {/* 小三角 */}
+          <div
+            style={{
+              position: 'absolute',
+              top: -6,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 0,
+              height: 0,
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderBottom: '6px solid rgba(255,255,255,0.92)',
+            }}
+          />
+        </div>
       )}
 
-      {/* 宠物本体 */}
-      <div
-        className={`floating-pet-body ${animClass}`}
-        style={{
-          fontSize: 72,
-          filter: `drop-shadow(0 0 18px ${colors.glow})`,
-          transition: 'transform 0.3s ease',
-          transform: pet?.mood === 'sleepy' ? 'rotate(-10deg) scale(0.9)' : 'scale(1)',
-          lineHeight: 1,
-          position: 'relative',
-          zIndex: 5,
-          pointerEvents: 'none',
-        }}
-      >
-        {emoji}
-      </div>
-
-      {/* 心情标签 */}
-      <div
-        className="floating-mood-label"
-        style={{
-          marginTop: 8,
-          background: `linear-gradient(135deg, ${colors.bg}44, ${colors.bg}22)`,
-          border: `1px solid ${colors.bg}55`,
-          borderRadius: 12,
-          padding: '2px 12px',
-          fontSize: 11,
-          color: colors.bg,
-          fontWeight: 600,
-          letterSpacing: 1,
-        }}
-      >
-        {pet?.mood === 'calm' && '平静'}
-        {pet?.mood === 'anxious' && '不安'}
-        {pet?.mood === 'sad' && '低落'}
-        {pet?.mood === 'joyful' && '开心'}
-        {pet?.mood === 'sleepy' && '困倦'}
-        {pet?.mood === 'angry' && '生气'}
-        {pet?.mood === 'happy' && '快乐'}
-        {pet?.mood === 'excited' && '兴奋'}
-        {!['calm','anxious','sad','joyful','sleepy','angry','happy','excited'].includes(pet?.mood || '') && pet?.mood}
-      </div>
-
-      {/* 能量条 */}
-      <div
-        style={{
-          width: 120,
-          height: 4,
-          marginTop: 8,
-          background: 'rgba(255,255,255,0.08)',
-          borderRadius: 2,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: `${energyPercent}%`,
-            background: `linear-gradient(90deg, ${colors.bg}88, ${colors.bg})`,
-            borderRadius: 2,
-            transition: 'width 0.5s ease',
-          }}
-        />
-      </div>
-
-      {/* 经验条 */}
-      <div
-        style={{
-          width: 120,
-          height: 2,
-          marginTop: 4,
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: 1,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: `${Math.min(100, ((pet?.exp || 0) / ((pet?.level || 1) * 100)) * 100)}%`,
-            background: 'linear-gradient(90deg, #c9a0ff66, #c9a0ff)',
-            borderRadius: 1,
-            transition: 'width 0.5s ease',
-          }}
-        />
-      </div>
-
-      {/* 提示文字 */}
-      <div
-        style={{
-          marginTop: 12,
-          fontSize: 10,
-          color: 'rgba(255,255,255,0.25)',
-          textAlign: 'center',
-        }}
-      >
-        拖拽移动 | 双击回主窗口
-      </div>
+      {/* ===== CSS 动画 ===== */}
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-8px) scale(1.03); }
+        }
+        @keyframes bubbleIn {
+          from { opacity: 0; transform: translateY(8px) scale(0.9); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .pet-body:hover {
+          animation: float 0.8s ease-in-out infinite !important;
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 };

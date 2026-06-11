@@ -1,9 +1,9 @@
 {
   "name": "xinyuan-emo-mate",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "心元 EMO-Mate - 有温度的AI情感陪伴助手",
   "type": "module",
-  "main": "electron/main.js",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

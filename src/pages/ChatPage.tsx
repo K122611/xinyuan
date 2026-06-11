@@ -121,6 +121,7 @@ export function ChatPage() {
     try {
       const appStore = useAppStore.getState();
       const cozeConvId = appStore.getCozeConvId(sessionId);
+      const cozeChatId = appStore.getCozeChatId(sessionId);  // 🔑 续接对话用首条 chat_id
 
       // 新会话传空历史，让API注入心元人设；已有会话传完整历史
       const currentMessages = useChatStore.getState().messages;
@@ -131,11 +132,19 @@ export function ChatPage() {
           }))
         : [];
 
-      const result = await chatWithCoze(text, cozeConvId, history);
+      const result = await chatWithCoze(text, cozeConvId, cozeChatId, history);
+
+      // 🔍 诊断日志：确认 API 成功 + 会话ID
+      console.log('[ChatPage] ✅ Coze API 成功 | convId:', result.conversationId, '| chatId:', result.messageId, '| 回复前30字:', result.content?.slice(0, 30));
 
       // 保存 Coze 会话ID 以便后续对话保持上下文
       if (result.conversationId) {
         appStore.setCozeConvId(sessionId, result.conversationId);
+      }
+      // 🔑 保存首条 chat_id 以便后续轮询
+      if (!cozeChatId && result.messageId) {
+        appStore.setCozeChatId(sessionId, result.messageId);
+        console.log('[ChatPage] 🔑 保存初始 chatId:', result.messageId);
       }
 
       const aiMsg = {
@@ -156,11 +165,13 @@ export function ChatPage() {
         'ai'
       );
       petIPC.sendToPet('speech_bubble', {
-        text: result.content.slice(0, 30),
+        text: result.content.slice(0, 30)
         emotion: petEmotionLabel,
       });
     } catch (err) {
-      console.warn('[ChatPage] Coze API 调用失败，使用本地模板回复:', err);
+      console.error('[ChatPage] ❌ Coze API 失败，降级本地模板 | 错误:', (err as Error).message);
+      console.error('[ChatPage] ℹ️ 用户输入:', text.slice(0, 50));
+      console.error('[ChatPage] ℹ️ 当前 cozeConvId:', appStore.getCozeConvId(sessionId));
       // 降级到本地模板回复
       const response = generateResponse(text, emotion);
       const aiMsg = {

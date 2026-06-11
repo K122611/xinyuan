@@ -1,82 +1,86 @@
-// ============ 宠物悬浮窗 IPC 通讯桥 ============
-// 在主窗口和悬浮宠物窗口之间传递消息
+// ============ 宠物悬浮窗 IPC 桥接层 ============
+// 同时支持 Electron 桌面端 和 浏览器开发环境
 
-interface PetMessage {
-  type: 'speech_bubble' | 'mood_update' | 'reaction' | 'greeting' | 'window_control' | 'sync_pet_state';
-  payload: any;
-  timestamp: number;
+export class PetMessage {
+  type: string = '';
+  payload: any = null;
+  timestamp: number = Date.now();
 }
 
 interface PetIPC {
-  showPet: () => void;
-  hidePet: () => void;
-  sendToPet: (type: PetMessage['type'], payload: any) => void;
-  onMessage: (callback: (msg: PetMessage) => void) => () => void;
-  closePet: () => void;
+  showPet: () => Promise<boolean>;
+  hidePet: () => Promise<boolean>;
+  closePet: () => Promise<boolean>;
+  togglePet: () => Promise<boolean>;
+  isVisible: () => Promise<boolean>;
+  getBounds: () => Promise<any>;
+  setBounds: (bounds: any) => Promise<boolean>;
+  allowClick: (allow: boolean) => Promise<boolean>;
+  sendToPet: (message: any) => Promise<boolean>;
+  syncState: (petState: any) => Promise<boolean>;
+  doubleClick: () => void;
+  dragStart: () => void;
+  onMessage: (callback: (message: PetMessage) => void) => void;
+  removeListener: (callback: (message: PetMessage) => void) => void;
 }
 
-// 检测是否在 Electron 环境中
-const isElectronEnv = (): boolean => {
-  return typeof window !== 'undefined' && !!(window as any).petAPI;
-};
+// ============ Electron 实现 ============
+function createElectronPetIPC(): PetIPC {
+  const petWindow = (window as any).petAPI;
+  return {
+    showPet: () => petWindow?.showPet?.() ?? Promise.resolve(false),
+    hidePet: () => petWindow?.hidePet?.() ?? Promise.resolve(false),
+    closePet: () => petWindow?.closePet?.() ?? Promise.resolve(false),
+    togglePet: () => petWindow?.togglePet?.() ?? Promise.resolve(false),
+    isVisible: () => petWindow?.isVisible?.() ?? Promise.resolve(false),
+    getBounds: () => petWindow?.getBounds?.() ?? Promise.resolve(null),
+    setBounds: (bounds) => petWindow?.setBounds?.(bounds) ?? Promise.resolve(false),
+    allowClick: (allow) => petWindow?.allowClick?.(allow) ?? Promise.resolve(false),
+    sendToPet: (message) => petWindow?.sendToPet?.(message) ?? Promise.resolve(false),
+    syncState: (petState) => petWindow?.syncState?.(petState) ?? Promise.resolve(false),
+    doubleClick: () => petWindow?.doubleClick?.(),
+    dragStart: () => petWindow?.dragStart?.(),
+    onMessage: (callback) => petWindow?.onMessage?.(callback),
+    removeListener: (callback) => petWindow?.removeListener?.(callback),
+  };
+}
 
-// 创建 IPC 实例
-const createPetIPC = (): PetIPC => {
-  // Electron 环境：使用 preload 注入的 petAPI
-  if (isElectronEnv()) {
-    const api = (window as any).petAPI;
-    return {
-      showPet: () => api.showPet(),
-      hidePet: () => api.hidePet(),
-      sendToPet: (type, payload) => api.sendToPet({ type, payload, timestamp: Date.now() }),
-      onMessage: (callback) => {
-        const handler = (msg: PetMessage) => callback(msg);
-        api.onMessage(handler);
-        return () => api.removeListener(handler);
-      },
-      closePet: () => api.closePet(),
-    };
-  }
-
-  // 浏览器环境：使用 BroadcastChannel / localStorage 模拟
-  const listeners: Array<(msg: PetMessage) => void> = [];
+// ============ 浏览器 Fallback（开发环境用 BroadcastChannel 模拟）============
+function createBrowserPetIPC(): PetIPC {
+  const listeners = new Set<(msg: PetMessage) => void>();
   const channel = typeof BroadcastChannel !== 'undefined'
-    ? new BroadcastChannel('xinyuan-pet-channel')
+    ? new BroadcastChannel('pet-ipc')
     : null;
 
   if (channel) {
     channel.onmessage = (event) => {
-      const msg = event.data as PetMessage;
-      listeners.forEach(fn => fn(msg));
+      const msg = event.data;
+      listeners.forEach((fn) => {
+        try { fn(msg); } catch {}
+      });
     };
   }
 
   return {
-    showPet: () => {
-      // 浏览器环境无法独立窗口，跳过
-      console.log('[PetIPC] showPet not available in browser');
-    },
-    hidePet: () => {
-      console.log('[PetIPC] hidePet not available in browser');
-    },
-    sendToPet: (type, payload) => {
-      const msg: PetMessage = { type, payload, timestamp: Date.now() };
-      // 也通过 localStorage 传递（浮动宠物页轮询）
-      localStorage.setItem('xinyuan_pet_msg', JSON.stringify(msg));
-      if (channel) channel.postMessage(msg);
-    },
-    onMessage: (callback) => {
-      listeners.push(callback);
-      return () => {
-        const idx = listeners.indexOf(callback);
-        if (idx >= 0) listeners.splice(idx, 1);
-      };
-    },
-    closePet: () => {
-      if (channel) channel.close();
-    },
+    showPet: async () => { console.log('[Browser] showPet (no-op)'); return true; },
+    hidePet: async () => { console.log('[Browser] hidePet (no-op)'); return true; },
+    closePet: async () => { console.log('[Browser] closePet (no-op)'); return true; },
+    togglePet: async () => { console.log('[Browser] togglePet (no-op)'); return true; },
+    isVisible: async () => false,
+    getBounds: async () => ({ x: 0, y: 0, width: 280, height: 380 }),
+    setBounds: async () => false,
+    allowClick: async () => false,
+    sendToPet: async (message) => { channel?.postMessage(message); return true; },
+    syncState: async (petState) => { channel?.postMessage(petState); return true; },
+    doubleClick: () => { console.log('[Browser] doubleClick (no-op)'); },
+    dragStart: () => {},
+    onMessage: (callback) => { listeners.add(callback); },
+    removeListener: (callback) => { listeners.delete(callback); },
   };
-};
+}
 
-export const petIPC = createPetIPC();
-export type { PetMessage, PetIPC };
+// ============ 导出统一的 IPC 实例 ============
+export const petIPC: PetIPC =
+  typeof window !== 'undefined' && (window as any).petAPI
+    ? createElectronPetIPC()
+    : createBrowserPetIPC();
