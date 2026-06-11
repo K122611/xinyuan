@@ -10,7 +10,6 @@ let isQuitting = false;
 
 const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
 
-// 宠物位置持久化路径
 const petBoundsPath = path.join(app.getPath('userData'), 'pet-bounds.json');
 
 // ============ 主窗口 ============
@@ -38,8 +37,9 @@ function createMainWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
+    mainWindow.loadURL('http://localhost:5173').catch(() => {
+      mainWindow.loadFile(path.join(__dirname, '../dist/renderer/index.html'));
+    });
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/renderer/index.html'));
   }
@@ -48,7 +48,6 @@ function createMainWindow() {
     mainWindow.show();
   });
 
-  // ❌ 不退出——隐藏到托盘
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
@@ -87,15 +86,18 @@ function createPetWindow() {
   });
 
   if (isDev) {
-    petWindow.loadURL('http://localhost:5173/#/floating-pet');
+    petWindow.loadURL('http://localhost:5173/#/floating-pet').catch(() => {
+      petWindow.loadFile(path.join(__dirname, '../dist/renderer/index.html'), {
+        hash: '/floating-pet',
+      });
+    });
   } else {
     petWindow.loadFile(path.join(__dirname, '../dist/renderer/index.html'), {
       hash: '/floating-pet',
     });
   }
 
-  // 鼠标穿透（仅透明区域，非透明区域正常响应点击）
-  petWindow.setIgnoreMouseEvents(true, { forward: true });
+  // 窗口始终接收鼠标事件，确保拖动可靠
 
   petWindow.on('closed', () => {
     petWindow = null;
@@ -104,7 +106,6 @@ function createPetWindow() {
     }
   });
 
-  // 拖拽结束时保存位置
   petWindow.on('moved', () => {
     savePetBounds(petWindow.getBounds());
   });
@@ -112,7 +113,6 @@ function createPetWindow() {
 
 // ============ 系统托盘 ============
 function createTray() {
-  // 托盘图标：跳过空白图直接用系统默认——右键菜单可用
   try {
     const iconPath = path.join(__dirname, '../public/icon.png');
     const icon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
@@ -152,12 +152,10 @@ function savePetBounds(bounds) {
 
 // ============ IPC ============
 function setupIPC() {
-  // --- 主窗口控制 ---
   ipcMain.handle('main:show', () => createMainWindow());
   ipcMain.handle('main:hide', () => { if (mainWindow) mainWindow.hide(); return true; });
   ipcMain.handle('main:is-visible', () => !!mainWindow && mainWindow.isVisible());
 
-  // --- 宠物窗口控制 ---
   ipcMain.handle('pet:show', () => {
     if (!petWindow) createPetWindow();
     petWindow.show();
@@ -181,22 +179,19 @@ function setupIPC() {
   });
 
   ipcMain.handle('pet:is-visible', () => !!petWindow && petWindow.isVisible());
-
   ipcMain.handle('pet:get-bounds', () => petWindow ? petWindow.getBounds() : loadPetBounds());
-
   ipcMain.handle('pet:set-bounds', (_e, bounds) => {
     if (petWindow && bounds) petWindow.setBounds(bounds);
   });
 
-  // --- 鼠标穿透切换 ---
-  ipcMain.handle('pet:allow-click', (_e, allow) => {
-    if (petWindow) {
-      petWindow.setIgnoreMouseEvents(!allow, { forward: true });
+  // --- 手动拖拽窗口 ---
+  ipcMain.on('pet:move-window', (_e, { dx, dy }) => {
+    if (petWindow && !petWindow.isDestroyed()) {
+      const [x, y] = petWindow.getPosition();
+      petWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
     }
-    return true;
   });
 
-  // --- 宠物窗口消息转发 ---
   ipcMain.handle('pet:send-message', (_e, message) => {
     if (petWindow && !petWindow.isDestroyed()) {
       petWindow.webContents.send('pet:message', message);
@@ -209,17 +204,10 @@ function setupIPC() {
     }
   });
 
-  // --- 拖拽 / 双击 ---
-  ipcMain.on('pet:drag-start', () => {
-    // 拖拽开始 → 暂时允许鼠标事件
-    if (petWindow) petWindow.setIgnoreMouseEvents(false);
-  });
-
   ipcMain.on('pet:dblclick', () => {
     createMainWindow();
   });
 
-  // --- 应用退出 ---
   ipcMain.handle('app:quit', () => {
     isQuitting = true;
     app.quit();
@@ -231,13 +219,11 @@ function setupIPC() {
 app.whenReady().then(() => {
   setupIPC();
   createMainWindow();
-  createPetWindow(); // 🔥 自动启动桌宠
+  createPetWindow();
   createTray();
 });
 
-app.on('window-all-closed', () => {
-  // 不自动退出——桌宠常驻
-});
+app.on('window-all-closed', () => {});
 
 app.on('before-quit', () => {
   isQuitting = true;

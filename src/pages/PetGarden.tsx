@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { usePetStore, useEmotionStore, useAppStore } from '@/store';
+import { usePetStore, useEmotionStore, useAppStore, SHOP_ITEMS } from '@/store';
+import type { AccessoryItem } from '@/store';
 
 const moodAnimations: Record<string, { emoji: string; description: string; color: string; }> = {
   calm:    { emoji: '🐱', description: '你的萌宠正安静地趴着，尾巴轻轻摇摆', color: '#60b0d0' },
@@ -33,13 +34,14 @@ const GREETINGS_CN = [
 ];
 
 export function PetGarden() {
-  const { pet, isAnimating, reaction, speechBubble, hasGreetedToday, loadPet, feedPet, showSpeechBubble, hideSpeechBubble, queueGreeting, markGreeted, resetGreetingTimer } = usePetStore();
+  const { pet, isAnimating, reaction, speechBubble, hasGreetedToday, loadPet, feedPet, equipAccessory, unequipAccessory, isAccessoryEquipped, showSpeechBubble, hideSpeechBubble, queueGreeting, markGreeted, resetGreetingTimer } = usePetStore();
   const currentMood = useEmotionStore((s) => s.currentMood);
   const togglePetWindow = useAppStore((s) => s.togglePetWindow);
   const petWindowVisible = useAppStore((s) => s.petWindowVisible);
   const [petScale, setPetScale] = useState(1);
   const [showHeart, setShowHeart] = useState(false);
   const [showBubble, setShowBubble] = useState(true);
+  const [dressUpOpen, setDressUpOpen] = useState(false);
   const greetingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { loadPet(); resetGreetingTimer(); }, []);
@@ -215,6 +217,16 @@ export function PetGarden() {
             {moodInfo.emoji}
           </div>
 
+          {/* 已装备装饰品 */}
+          {pet?.accessories?.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', fontSize: 24, marginTop: -8 }}>
+              {pet.accessories.map((id: string) => {
+                const item = SHOP_ITEMS.find(i => i.id === id);
+                return item ? <span key={id} title={item.name}>{item.emoji}</span> : null;
+              })}
+            </div>
+          )}
+
           {showHeart && (
             <div className="fade-in" style={{
               position: 'absolute',
@@ -318,11 +330,52 @@ export function PetGarden() {
           <button className="btn btn-secondary" style={{ flex: 1 }}>
             🎮 玩耍
           </button>
-          <button className="btn btn-secondary" style={{ flex: 1 }}>
+          <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setDressUpOpen(true)}>
             🎀 装扮
           </button>
         </div>
       </div>
+
+      {/* ===== 装扮弹窗 ===== */}
+      {dressUpOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }} onClick={() => setDressUpOpen(false)}>
+          <div style={{
+            background: 'var(--bg-card)', borderRadius: 16, padding: 24,
+            maxWidth: 520, width: '90%', maxHeight: '80vh', overflow: 'auto',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>🎀 装扮商城</h3>
+              <button onClick={() => setDressUpOpen(false)} style={{
+                background: 'none', border: 'none', fontSize: 20, cursor: 'pointer'
+              }}>✕</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+              {SHOP_ITEMS.map((item: AccessoryItem) => {
+                const equipped = isAccessoryEquipped(item.id);
+                return (
+                  <div key={item.id} style={{
+                    background: equipped ? 'var(--bg-tertiary)' : 'var(--bg-hover)',
+                    borderRadius: 12, padding: 12, textAlign: 'center',
+                    border: equipped ? '2px solid var(--accent-warm)' : '2px solid transparent',
+                    cursor: 'pointer', transition: 'all 0.2s'
+                  }} onClick={() => equipped ? unequipAccessory(item.id) : equipAccessory(item.id)}>
+                    <div style={{ fontSize: 32, marginBottom: 4 }}>{item.emoji}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{item.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {equipped ? '✅ 已装备' : `💰 ${item.price} EXP`}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 萌宠社交预览 */}
       <div className="card">

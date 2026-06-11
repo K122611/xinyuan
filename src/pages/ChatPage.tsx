@@ -1,13 +1,14 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useAppStore, useChatStore, useEmotionStore, usePetStore, useMilestoneStore } from '@/store';
-import { chatWithCoze } from '@/services/cozeApi';
+import { chatWithCoze, chatWithCozeStream, cleanContent } from '@/services/cozeApi';
 import { petIPC } from '@/services/petIPC';
 
 export function ChatPage() {
   const currentSessionId = useAppStore((s) => s.currentSessionId);
   const initSession = useAppStore((s) => s.initSession);
-  const { messages, isLoading, loadHistory, addMessage, setLoading, loadSessions, sessions } = useChatStore();
+  const { messages, isLoading, loadHistory, addMessage, updateMessage, setLoading, loadSessions, sessions } = useChatStore();
   const [input, setInput] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const currentMood = useEmotionStore((s) => s.currentMood);
 
@@ -118,71 +119,69 @@ export function ChatPage() {
     }
 
     // 调用 Coze API 获取真实AI回复
-    try {
-      const appStore = useAppStore.getState();
-      const cozeConvId = appStore.getCozeConvId(sessionId);
-      const cozeChatId = appStore.getCozeChatId(sessionId);  // 🔑 续接对话用首条 chat_id
+    const appStore = useAppStore.getState();
+    const cozeConvId = appStore.getCozeConvId(sessionId);
+    const cozeChatId = appStore.getCozeChatId(sessionId);
 
-      // 新会话传空历史，让API注入心元人设；已有会话传完整历史
+    // 先创建占位 AI 消息，后续流式更新
+    const aiMsgId = (Date.now() + 1).toString();
+    const placeholderMsg = {
+      id: aiMsgId,
+      session_id: sessionId,
+      role: 'assistant' as const,
+      content: '',
+      emotion_score: emotion.score,
+      emotion_label: emotion.label,
+    };
+    addMessage(placeholderMsg);
+
+    try {
+      // 构建历史（用于续聊上下文）
       const currentMessages = useChatStore.getState().messages;
       const history = cozeConvId
-        ? currentMessages.map((m) => ({
+        ? currentMessages.filter(m => m.id !== aiMsgId).map((m) => ({
             role: m.role as 'user' | 'assistant',
             content: m.content,
           }))
         : [];
 
-      const result = await chatWithCoze(text, cozeConvId, cozeChatId, history);
-
-      // 🔍 诊断日志：确认 API 成功 + 会话ID
-      console.log('[ChatPage] ✅ Coze API 成功 | convId:', result.conversationId, '| chatId:', result.messageId, '| 回复前30字:', result.content?.slice(0, 30));
-
-      // 保存 Coze 会话ID 以便后续对话保持上下文
-      if (result.conversationId) {
-        appStore.setCozeConvId(sessionId, result.conversationId);
+      // 🔄 流式 SSE 调用——逐字返回
+      const stream = chatWithCozeStream(text, cozeConvId, history);
+      let lastConvId = cozeConvId;
+      let fullContent = '';
+      for await (const chunk of stream) {
+        if (chunk.type === 'conv_id') {
+          appStore.setCozeConvId(sessionId, chunk.data);
+          lastConvId = chunk.data;
+        } else if (chunk.type === 'answer_full') {
+          // answer 是累积全文，整体替换（避免重复叠加）
+          fullContent = chunk.data;
+          updateMessage(aiMsgId, fullContent);
+        } else if (chunk.type === 'text') {
+          // delta 增量，逐次追加
+          fullContent += chunk.data;
+          updateMessage(aiMsgId, fullContent);
+        }
+        // 'done' 类型忽略，循环自动结束
       }
-      // 🔑 保存首条 chat_id 以便后续轮询
-      if (!cozeChatId && result.messageId) {
-        appStore.setCozeChatId(sessionId, result.messageId);
-        console.log('[ChatPage] 🔑 保存初始 chatId:', result.messageId);
-      }
 
-      const aiMsg = {
-        id: (Date.now() + 1).toString(),
-        session_id: sessionId,
-        role: 'assistant' as const,
-        content: result.content,
-        emotion_score: emotion.score,
-        emotion_label: emotion.label,
-      };
-      addMessage(aiMsg);
+      // 流式结束：统一清理 JSON 元数据，再最终更新
+      fullContent = cleanContent(fullContent) || fullContent;
+      updateMessage(aiMsgId, fullContent);
 
-      // 方案A：AI回复后通知宠物
+      // 通知宠物
       const petEmotionLabel = emotion.label === '平和' ? '温暖' : emotion.label;
-      usePetStore.getState().notifyPet(
-        result.content.slice(0, 40),
-        petEmotionLabel,
-        'ai'
-      );
+      usePetStore.getState().notifyPet(fullContent.slice(0, 40) || '心元感受到了你的情绪…', petEmotionLabel, 'ai');
       petIPC.sendToPet('speech_bubble', {
-        text: result.content.slice(0, 30)
+        text: fullContent.slice(0, 30) || '心元感受到了你的情绪…',
         emotion: petEmotionLabel,
       });
     } catch (err) {
-      console.error('[ChatPage] ❌ Coze API 失败，降级本地模板 | 错误:', (err as Error).message);
-      console.error('[ChatPage] ℹ️ 用户输入:', text.slice(0, 50));
+      console.error('[ChatPage] ❌ 流式 API 失败 | 错误:', (err as Error).message);
       console.error('[ChatPage] ℹ️ 当前 cozeConvId:', appStore.getCozeConvId(sessionId));
-      // 降级到本地模板回复
+      // 降级到本地模板，更新占位消息
       const response = generateResponse(text, emotion);
-      const aiMsg = {
-        id: (Date.now() + 1).toString(),
-        session_id: sessionId,
-        role: 'assistant' as const,
-        content: response,
-        emotion_score: emotion.score,
-        emotion_label: emotion.label,
-      };
-      addMessage(aiMsg);
+      updateMessage(aiMsgId, response);
 
       // 降级回复也通知宠物
       usePetStore.getState().notifyPet(response.slice(0, 40), emotion.label, 'ai');
@@ -210,6 +209,44 @@ export function ChatPage() {
     '平和': 'linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%)',
   };
 
+  // 📋 复制单条消息
+  const copyMessage = async (msg: { id: string; content: string }) => {
+    try {
+      await navigator.clipboard.writeText(msg.content);
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      // 降级：用传统方式
+      const ta = document.createElement('textarea');
+      ta.value = msg.content;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    }
+  };
+
+  // 📋 复制全部对话
+  const copyFullConversation = async () => {
+    const state = useChatStore.getState();
+    const text = state.messages
+      .map(m => (m.role === 'user' ? '你' : '心元') + '：' + m.content)
+      .join('\n\n');
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: moodBg[currentMood] || moodBg['平和'], transition: 'background 0.5s' }}>
       {/* 顶部会话栏 */}
@@ -218,6 +255,12 @@ export function ChatPage() {
         display: 'flex', gap: 8, overflowX: 'auto', alignItems: 'center', flexShrink: 0,
       }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>历史:</span>
+        <button
+          onClick={() => { const sid = useAppStore.getState().initSession(); loadHistory(sid); }}
+          style={{ background: 'var(--accent-warm)', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          + 新对话
+        </button>
         {sessions.slice(0, 10).map((s) => (
           <button
             key={s.session_id}
@@ -231,12 +274,13 @@ export function ChatPage() {
             {new Date(s.last_active).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
           </button>
         ))}
-        <button
-          onClick={() => { const sid = useAppStore.getState().initSession(); loadHistory(sid); }}
-          style={{ background: 'var(--accent-warm)', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}
-        >
-          + 新对话
-        </button>
+        <div style={{ flex: 1 }} />{/* 占位，把复制全部推到右侧 */}
+        {messages.length > 0 && (
+          <button onClick={copyFullConversation} style={{
+            background: 'var(--accent-warm)', color: '#fff', border: 'none',
+            borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>📋 复制全部</button>
+        )}
       </div>
 
       {/* 消息列表 */}
@@ -268,7 +312,25 @@ export function ChatPage() {
               color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
               border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
               fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              position: 'relative',
             }}>
+              {/* 📋 复制按钮 */}
+              <button
+                onClick={() => copyMessage(msg)}
+                title={copiedId === msg.id ? '已复制' : '复制'}
+                style={{
+                  position: 'absolute', top: 6, right: 8,
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  fontSize: copiedId === msg.id ? 11 : 14, opacity: copiedId === msg.id ? 1 : 0.3,
+                  color: msg.role === 'user' ? '#ffffffaa' : 'var(--text-muted)',
+                  padding: '2px 4px', borderRadius: 4, lineHeight: 1,
+                  transition: 'opacity 0.2s',
+                }}
+                onMouseEnter={(e) => { if (copiedId !== msg.id) e.currentTarget.style.opacity = '0.9'; }}
+                onMouseLeave={(e) => { if (copiedId !== msg.id) e.currentTarget.style.opacity = '0.3'; }}
+              >
+                {copiedId === msg.id ? '✓ 已复制' : '📋'}
+              </button>
               {msg.content}
               {msg.role === 'assistant' && msg.emotion_label && (
                 <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', opacity: 0.7 }}>

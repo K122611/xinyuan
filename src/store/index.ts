@@ -155,6 +155,7 @@ interface ChatState {
   sessions: Session[];
   loadHistory: (sessionId: string) => void;
   addMessage: (msg: Message) => void;
+  updateMessage: (id: string, content: string) => void;
   loadSessions: () => void;
   setLoading: (loading: boolean) => void;
 }
@@ -199,6 +200,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
   },
 
+  updateMessage: (id, content) => {
+    const allMessages: Message[] = storage.get('allMessages', []);
+    const idx = allMessages.findIndex((m: Message) => m.id === id);
+    if (idx >= 0) allMessages[idx].content = content;
+    storage.set('allMessages', allMessages);
+
+    set((s) => ({
+      messages: s.messages.map((m) => (m.id === id ? { ...m, content } : m)),
+    }));
+  },
+
   loadSessions: () => {
     const sessions = storage.get('sessions', []);
     set({ sessions });
@@ -219,8 +231,32 @@ interface SpeechBubble {
   type?: string; // 'reaction' | 'greeting' | 'milestone'
 }
 
+
+// ============ 装扮系统 ============
+export interface AccessoryItem {
+  id: string;
+  name: string;
+  emoji: string;
+  price: number;
+  category: 'face' | 'head' | 'body' | 'effect';
+  description: string;
+}
+
+export const SHOP_ITEMS: AccessoryItem[] = [
+  { id: 'sunglasses', name: '墨镜', emoji: '🕶️', price: 100, category: 'face',   description: '酷酷的墨镜，戴上超有型' },
+  { id: 'crown',      name: '皇冠', emoji: '👑', price: 300, category: 'head',   description: '金光闪闪的小皇冠' },
+  { id: 'ribbon',     name: '蝴蝶结', emoji: '🎀', price: 80,  category: 'head',   description: '可爱的蝴蝶结发饰' },
+  { id: 'scarf',      name: '围巾', emoji: '🧣', price: 120, category: 'body',   description: '暖和的围巾，冬天必备' },
+  { id: 'flower',     name: '小花', emoji: '🌸', price: 50,  category: 'head',   description: '一朵清新的小花' },
+  { id: 'sparkles',   name: '星光', emoji: '✨', price: 150, category: 'effect', description: '身边闪烁的星光特效' },
+  { id: 'hearts',     name: '爱心', emoji: '💕', price: 200, category: 'effect', description: '漂浮的爱心气泡' },
+  { id: 'bowtie',     name: '领结', emoji: '🎀', price: 90,  category: 'body',   description: '绅士的小领结' },
+  { id: 'hat',        name: '礼帽', emoji: '🎩', price: 250, category: 'head',   description: '优雅的黑色礼帽' },
+  { id: 'cat_ears',   name: '猫耳', emoji: '🐱', price: 180, category: 'head',   description: '更可爱的猫耳头饰' },
+];
+
 interface PetState {
-  pet: { mood: string; energy: number; level: number; exp: number; skin: string };
+  pet: { mood: string; energy: number; level: number; exp: number; skin: string; accessories: string[] };
   isAnimating: boolean;
   reaction: ReactionType;
   speechBubble: SpeechBubble | null;
@@ -230,6 +266,9 @@ interface PetState {
   loadPet: () => void;
   feedPet: () => void;
   setPetMood: (mood: string) => void;
+	equipAccessory: (itemId: string) => void;
+	unequipAccessory: (itemId: string) => void;
+	isAccessoryEquipped: (itemId: string) => boolean;
   // 方案A/B/C 新增方法
   notifyPet: (text: string, emotion: string, source?: 'ai' | 'system' | 'greeting') => void;
   showSpeechBubble: (text: string, emotion: string, source?: string) => void;
@@ -242,7 +281,7 @@ interface PetState {
 }
 
 export const usePetStore = create<PetState>((set, get) => ({
-  pet: storage.get('pet', { mood: 'calm', energy: 7, level: 1, exp: 0, skin: 'default' }),
+  pet: storage.get('pet', { mood: 'calm', energy: 7, level: 1, exp: 0, skin: 'default', accessories: [] }),
   isAnimating: false,
   reaction: 'none' as ReactionType,
   speechBubble: null,
@@ -251,7 +290,7 @@ export const usePetStore = create<PetState>((set, get) => ({
   lastInteraction: storage.get('lastInteraction', Date.now()),
 
   loadPet: () => {
-    const pet = storage.get('pet', { mood: 'calm', energy: 7, level: 1, exp: 0, skin: 'default' });
+    const pet = storage.get('pet', { mood: 'calm', energy: 7, level: 1, exp: 0, skin: 'default', accessories: [] });
     const hasGreetedToday = storage.get('hasGreetedToday', false);
     const lastInteraction = storage.get('lastInteraction', Date.now());
     set({ pet, hasGreetedToday, lastInteraction });
@@ -270,7 +309,27 @@ export const usePetStore = create<PetState>((set, get) => ({
     setTimeout(() => set({ isAnimating: false }), 2000);
   },
 
-  setPetMood: (mood) => {
+
+  equipAccessory: (itemId: string) => {
+    const pet = { ...get().pet };
+    if (!pet.accessories.includes(itemId)) {
+      pet.accessories = [...pet.accessories, itemId];
+      storage.set('pet', pet);
+      set({ pet });
+    }
+  },
+
+  unequipAccessory: (itemId: string) => {
+    const pet = { ...get().pet };
+    pet.accessories = pet.accessories.filter(id => id !== itemId);
+    storage.set('pet', pet);
+    set({ pet });
+  },
+
+  isAccessoryEquipped: (itemId: string) => {
+    return get().pet.accessories.includes(itemId);
+  },
+	  setPetMood: (mood) => {
     const pet = { ...get().pet, mood };
     storage.set('pet', pet);
     set({ pet });

@@ -38,7 +38,11 @@ export default function App() {
         setShowFloatingPet(true);
         // Electron 环境下通知主进程这是宠物窗口
         if ((window as any).electronAPI?.isElectron) {
+          document.documentElement.classList.add('floating-pet-window');
           document.body.classList.add('floating-pet-window');
+          document.getElementById('root')?.classList.add('floating-pet-window');
+          const appEl = document.querySelector('.app');
+          if (appEl) appEl.classList.add('floating-pet-container');
         }
       }
     };

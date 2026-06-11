@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   isElectron: true,
   appVersion: require('../package.json').version,
+  openChat: () => ipcRenderer.invoke('main:show'),
+  moveWindow: (dx, dy) => ipcRenderer.send('pet:move-window', { dx, dy }),
 });
 
 // ============ 宠物悬浮窗 API ============
@@ -29,20 +31,15 @@ contextBridge.exposeInMainWorld('petAPI', {
   togglePet: () => ipcRenderer.invoke('pet:toggle'),
   isVisible: () => ipcRenderer.invoke('pet:is-visible'),
 
-  // 宠物窗口位置
   getBounds: () => ipcRenderer.invoke('pet:get-bounds'),
   setBounds: (bounds) => ipcRenderer.invoke('pet:set-bounds', bounds),
 
-  // 鼠标穿透切换（hover 宠物身体时允许点击）
   allowClick: (allow) => ipcRenderer.invoke('pet:allow-click', !!allow),
+  allowClickSync: (allow) => ipcRenderer.sendSync('pet:allow-click-sync', !!allow),
 
-  // 向另一个窗口发送宠物消息
   sendToPet: (message) => ipcRenderer.invoke('pet:send-message', message),
-
-  // 同步宠物状态
   syncState: (petState) => ipcRenderer.invoke('pet:sync-state', petState),
 
-  // 事件监听
   onMessage: (callback) => {
     petMessageListeners.add(callback);
   },
@@ -50,7 +47,6 @@ contextBridge.exposeInMainWorld('petAPI', {
     petMessageListeners.delete(callback);
   },
 
-  // 窗口控制
   dragStart: () => ipcRenderer.send('pet:drag-start'),
   doubleClick: () => ipcRenderer.send('pet:dblclick'),
 });

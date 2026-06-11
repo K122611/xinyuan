@@ -357,13 +357,14 @@ body {
 }
 
 /* ===== 悬浮宠物窗口（方案B） ===== */
+html.floating-pet-window,
+body.floating-pet-window,
+#root.floating-pet-window,
 .floating-pet-window {
   background: transparent !important;
-  -webkit-app-region: drag;
 }
 
 .floating-pet-container {
-  -webkit-app-region: no-drag;
   cursor: grab;
 }
 
@@ -379,11 +380,6 @@ body {
 .floating-speech-bubble {
   animation: bubbleIn 0.3s ease-out;
   pointer-events: auto;
-}
-
-/* 悬浮窗透明窗口完全透明背景 */
-body.floating-pet-window {
-  background: transparent !important;
 }
 
 /* ===== 反应标签动画 ===== */

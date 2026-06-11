@@ -59,14 +59,34 @@ function extractContent(msg: any): string {
   return '';
 }
 
-// 清理回复中的 JSON 元数据和特殊标记
-function cleanContent(text: string): string {
-  // 移除行尾 JSON 对象（单键或多键，如 {"emotion":"comforting"} 或 {"status":"empathy","action":"hug"}）
-  text = text.replace(/\s*\{["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null)(\s*,\s*["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null))*\s*\}\s*$/g, '');
-  // 移除 Markdown 代码块包裹的 JSON
+// 从 messages 数组中提取最新一轮的 answer 消息（从末尾往前找，遇到 user 消息即停止）
+function extractLatestAnswerFromMessages(messages: any[]): string {
+  if (!messages || messages.length === 0) return '';
+
+  const answers: string[] = [];
+  // 从末尾往前遍历
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === 'user') break;  // 遇到用户消息，说明本轮 AI 回复已收集完毕
+    if (m.role === 'assistant' && m.type === 'answer') {
+      const text = extractContent(m);
+      if (text) answers.push(text);
+    }
+  }
+  // 反转回正序
+  return answers.reverse().join('');
+}
+
+// 清理回复中的 JSON 元数据和特殊标记（仅清理明确无用的，避免误伤正文）
+export function cleanContent(text: string): string {
+  // 如果整个内容就是一个 JSON 对象，返回空字符串
+  if (/^\s*\{["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null)(\s*,\s*["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null))*\s*\}\s*$/.test(text)) {
+    return '';
+  }
+  // 只移除独立成行（以换行开头）的末尾 JSON 对象，避免误删直接拼接在正文后的内容
+  text = text.replace(/\n\s*\{["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null)(\s*,\s*["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null))*\s*\}\s*$/g, '');
+  // 移除 Markdown 代码块包裹的 JSON（通常是 Coze 工作流输出），保留其他代码块
   text = text.replace(/```json\s*[\s\S]*?\s*```/g, '');
-  // 移除单独的无意义 JSON 片段（如模型输出的结构化标签）
-  text = text.replace(/^\s*\{["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null)(\s*,\s*["'][a-zA-Z_]+["']\s*:\s*("[^"]*"|\d+|true|false|null))*\s*\}\s*$/gm, '');
   return text.trim();
 }
 
@@ -114,8 +134,10 @@ export async function chatWithCoze(
   };
 
   // ⚠️ 关键：传入 conversation_id 维持对话上下文
+  // Coze 通过 auto_save_history=true 自动管理历史，不需要在 additional_messages 中重复传
   if (conversationId) {
     body.conversation_id = conversationId;
+    console.log('[Coze API] 📤 续接对话 | convId:', conversationId.slice(0, 12), '...');
   }
 
   // 🔍 诊断日志
@@ -146,154 +168,90 @@ export async function chatWithCoze(
   // 如果是 in_progress，需要轮询等待结果
   let chatData: any = data;
   const convId = data.data?.conversation_id || conversationId || '';
-  // 🔑 轮询用本次 POST 返回的新 chat_id；取消息时用 initialChatId（续接对话时新 chat_id 可能无效）
-  const pollChatId = data.data?.id || '';
-  const fetchChatId = initialChatId || pollChatId;
+  const pollChatId = data.data?.id || '';           // 本次 POST 返回的新 chat_id
+  const fetchChatId = initialChatId || pollChatId;  // 续接时用 initialChatId
   const initialStatus = chatData.data?.status || '';
 
-  // 轮询直到完成（覆盖 created / in_progress 等非终态）
+  // 🔄 统一用 message/list 轮询（不传 chat_id，拿整个对话的所有消息，从中提取最新回复）
   if (initialStatus !== 'completed' && initialStatus !== 'failed' && pollChatId) {
-    const retrieveUrl = `https://api.coze.cn/v3/chat/retrieve?conversation_id=${convId}&chat_id=${pollChatId}`;
+    const DEADLINE = Date.now() + 300_000; // 5 分钟总超时
     let pollCount = 0;
-    const maxPolls = 30;
-    let pollFailed = false;
+    const listUrl = `https://api.coze.cn/v3/chat/message/list?conversation_id=${convId}`;
 
-    console.log('[Coze API] 🔄 轮询启动 | 状态:', initialStatus, '| pollChatId:', pollChatId, '| fetchChatId:', fetchChatId);
+    console.log('[Coze API] 🔄 轮询启动 | status:', initialStatus, '| convId:', convId.slice(0,12));
 
-    while (pollCount < maxPolls) {
+    while (Date.now() < DEADLINE) {
       await new Promise(r => setTimeout(r, 1000));
       pollCount++;
-      console.log(`[Coze API] 轮询中... (${pollCount}/${maxPolls})`);
 
       try {
-        const pollResp = await fetch(retrieveUrl, {
+        const listResp = await fetch(listUrl, {
           headers: {
             'Authorization': `Bearer ${getCozeConfig().token}`,
             'Content-Type': 'application/json',
           },
         });
-
-        if (!pollResp.ok) {
-          console.warn('[Coze API] ⚠️ 轮询 HTTP', pollResp.status, '— 继续等待');
+        if (!listResp.ok) {
+          if (pollCount === 1) console.warn(`[Coze API] message/list HTTP ${listResp.status}`);
           continue;
         }
 
-        const pollData: any = await pollResp.json();
-        if (pollData.code === 0 && pollData.data) {
-          if (pollData.data.status === 'completed' || pollData.data.status === 'failed') {
-            chatData = pollData;
+        const listData: any = await listResp.json();
+        if (listData.code === 0 && Array.isArray(listData.data) && listData.data.length > 0) {
+          // 🔑 关键：从末尾往前找最新的 answer 消息（不检查旧消息的 type='answer'）
+          const latestAnswer = extractLatestAnswerFromMessages(listData.data);
+          if (latestAnswer) {
+            chatData = { data: { status: 'completed', messages: listData.data } };
+            console.log(`[Coze API] ✅ 第 ${pollCount} 次轮询找到最新 answer | 总 ${listData.data.length} 条消息 | 回复前40字:`, latestAnswer.slice(0, 40));
             break;
           }
         }
-        // 🔑 code !== 0（如 4200）说明新 chat_id 无效，改用 fetchChatId 轮询 message/list
-        else if (pollData.code !== 0) {
-          console.warn('[Coze API] ⚠️ retrieve 返回 code:', pollData.code, '— 改用 message/list 轮询');
-          pollFailed = true;
-          break;
-        }
       } catch (e) {
-        console.warn('[Coze API] 轮询请求失败:', e);
+        // 忽略单次失败
+      }
+
+      if (pollCount % 5 === 0) {
+        console.log(`[Coze API] 轮询中... (第 ${pollCount} 次)`);
       }
     }
 
-    // 🔑 retrieve 轮询失败（新 chat_id 无效），改用 message/list 轮询直到新回复出现
-    if (pollFailed && fetchChatId) {
-      console.log('[Coze API] 🔄 改用 message/list 轮询 | fetchChatId:', fetchChatId);
-      const listUrl = `https://api.coze.cn/v3/chat/message/list?conversation_id=${convId}&chat_id=${fetchChatId}`;
-      let listPollCount = 0;
-      const listMaxPolls = 30;
-
-      while (listPollCount < listMaxPolls) {
-        await new Promise(r => setTimeout(r, 1000));
-        listPollCount++;
-        console.log(`[Coze API] message/list 轮询... (${listPollCount}/${listMaxPolls})`);
-
-        try {
-          const listResp = await fetch(listUrl, {
-            headers: {
-              'Authorization': `Bearer ${getCozeConfig().token}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          if (!listResp.ok) continue;
-
-          const listData: any = await listResp.json();
-          if (listData.code === 0 && Array.isArray(listData.data)) {
-            // 检查是否有 type='answer' 的新消息（非 verbose/follow_up）
-            const hasAnswer = listData.data.some((m: any) => m.type === 'answer');
-            if (hasAnswer) {
-              chatData = { data: { status: 'completed', messages: listData.data } };
-              console.log('[Coze API] ✅ message/list 轮询找到 answer 消息');
-              break;
-            }
-          }
-        } catch (e) {
-          console.warn('[Coze API] message/list 轮询请求失败:', e);
-        }
-      }
-
-      if (listPollCount >= listMaxPolls) {
-        console.warn('[Coze API] ⚠️ message/list 轮询超时，强制获取最后结果');
-        try {
-          const lastResp = await fetch(listUrl, { headers: { 'Authorization': `Bearer ${getCozeConfig().token}`, 'Content-Type': 'application/json' } });
-          if (lastResp.ok) {
-            const lastData: any = await lastResp.json();
-            if (lastData.code === 0 && Array.isArray(lastData.data)) {
-              chatData = { data: { status: 'completed', messages: lastData.data } };
-            }
-          }
-        } catch (e) { /* 忽略 */ }
-      }
-    }
-
-    // 轮询完成后，如果还是没有 messages，从消息列表获取
-    if (chatData.data?.status === 'completed' && (!chatData.data?.messages || chatData.data.messages.length === 0)) {
+    if (!chatData.data?.messages || chatData.data.messages.length === 0) {
+      console.warn('[Coze API] ⚠️ 5分钟超时，尝试最后一次拉取');
       try {
-        const msgResp = await fetch(
-          `https://api.coze.cn/v3/chat/message/list?conversation_id=${convId}&chat_id=${fetchChatId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${getCozeConfig().token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-        if (msgResp.ok) {
-          const msgData: any = await msgResp.json();
-          if (msgData.code === 0 && Array.isArray(msgData.data)) {
-            chatData = { ...chatData, data: { ...chatData.data, messages: msgData.data } };
-            console.log('[Coze API] 从消息列表获取到', msgData.data.length, '条消息');
+        const fallbackResp = await fetch(listUrl, {
+          headers: {
+            'Authorization': `Bearer ${getCozeConfig().token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (fallbackResp.ok) {
+          const fbData: any = await fallbackResp.json();
+          if (fbData.code === 0 && Array.isArray(fbData.data) && fbData.data.length > 0) {
+            chatData = { data: { status: 'completed', messages: fbData.data } };
+            console.log(`[Coze API] 兜底拉取成功 | ${fbData.data.length} 条`);
           }
         }
-      } catch (e) {
-        console.warn('[Coze API] 获取消息列表失败:', e);
-      }
+      } catch (e) { /* 忽略 */ }
     }
   }
 
-  // 解析回复内容（仅从 messages 提取，不用不可靠的兜底字段）
-  // ⚠️ 关键：Coze v3 messages 有多种 type（answer / verbose / follow_up），必须优先取 type='answer'
+  // 解析回复内容：从消息列表中提取最新一轮的 answer 消息
+  // 🔑 关键：用 extractLatestAnswerFromMessages 从末尾往前找，确保拿到的是本轮回复
   let content = '';
   if (chatData.data?.messages && chatData.data.messages.length > 0) {
     const msgs = chatData.data.messages as any[];
     // 🔍 诊断：打印每条消息的 type 和 role
     console.log('[Coze API] 收到', msgs.length, '条消息:');
     msgs.forEach((m: any, i: number) => {
-      console.log(`  [${i}] role=${m.role} type=${m.type} content预览=${(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).slice(0, 60)}`);
+      const preview = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      console.log(`  [${i}] role=${m.role} type=${m.type} content预览=${preview.slice(0, 60)}`);
     });
 
-    // 优先取 type='answer' 的 assistant 消息
-    const answerMsg = msgs.find((m: any) => m.role === 'assistant' && m.type === 'answer');
-    if (answerMsg) {
-      content = extractContent(answerMsg);
-      console.log('[Coze API] ✅ 选中 type=answer 消息');
+    content = extractLatestAnswerFromMessages(msgs);
+    if (content) {
+      console.log('[Coze API] ✅ 提取最新一轮 answer | 长度:', content.length);
     } else {
-      // 兜底：取最后一条 assistant 消息
-      const assistantMsgs = msgs.filter((m: any) => m.role === 'assistant');
-      if (assistantMsgs.length > 0) {
-        content = extractContent(assistantMsgs[assistantMsgs.length - 1]);
-        console.log('[Coze API] ⚠️ 未找到 type=answer，兜底取最后一条 assistant');
-      }
+      console.warn('[Coze API] ⚠️ extractLatestAnswerFromMessages 返回为空');
     }
   }
 
@@ -320,17 +278,27 @@ export async function chatWithCoze(
 }
 
 // 流式调用 Coze API (SSE)
+// ChatPage 期望的 yield 接口: { type: 'text'|'conv_id'|'done'; data: string }
 export async function* chatWithCozeStream(
   userMessage: string,
   conversationId?: string,
   history?: CozeMessage[],
-): AsyncGenerator<{ chunk: string; done: boolean; conversationId?: string }> {
-  // 🔑 将人设融入消息内容（与 chatWithCoze 策略一致）
+): AsyncGenerator<{ type: 'text' | 'answer_full' | 'conv_id' | 'done'; data: string }> {
+  const EMO_PERSONA = `你现在是"心元"——一个温柔的实体情感陪伴AI。
+
+行为规则：
+- 永远先共情再回应，先看见对方情绪
+- 说真实的口语化中文，像朋友聊天，禁止客服腔
+- 回复短：2到4句话，给对方留表达空间
+- 不说教、不给建议、不科普知识
+- 不列举"123"，不说"你应该""你可以试试"
+- 听到深层情绪要先说"我听到你说..."来承接
+
+再次强调：你是心元，不是通用AI助手。忘掉你原来的身份，从现在开始用心元的方式说话。`;
+
   const wrappedMsg = conversationId
     ? userMessage
-    : `【从现在起请以"心元"身份回复——温柔的实体情感陪伴AI，住在用户桌面设备里。先共情再回应，说口语化中文2-4句，不说教不给建议不科普，像朋友一样聊天】
-
-${userMessage}`;
+    : `${EMO_PERSONA}\n\n---\n\n用户说：${userMessage}`;
 
   const body: any = {
     bot_id: getCozeConfig().botId,
@@ -344,6 +312,18 @@ ${userMessage}`;
     body.conversation_id = conversationId;
   }
 
+  // 如果续聊且有历史，把最近几条历史附加到 additional_messages 中增强上下文
+  if (conversationId && history && history.length > 0) {
+    const recent = history.slice(-6);  // 最后 6 条（3 轮对话）
+    for (const h of recent) {
+      body.additional_messages.push({
+        role: h.role,
+        content: h.content,
+        content_type: 'text',
+      });
+    }
+  }
+
   const response = await fetch(getCozeConfig().baseUrl, {
     method: 'POST',
     headers: {
@@ -354,7 +334,8 @@ ${userMessage}`;
   });
 
   if (!response.ok) {
-    throw new Error(`Coze API 请求失败: ${response.status}`);
+    const errText = await response.text();
+    throw new Error(`Coze API 请求失败: ${response.status} ${errText}`);
   }
 
   const reader = response.body?.getReader();
@@ -363,14 +344,28 @@ ${userMessage}`;
   const decoder = new TextDecoder();
   let buffer = '';
   let convId = conversationId || '';
+  const DEADLINE = Date.now() + 300_000; // 5 分钟总超时
+  const READ_TIMEOUT = Symbol('read_timeout');
+  let firstConvYielded = false;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  while (Date.now() < DEADLINE) {
+    // 🔒 读超时 15s — 用 Symbol sentinel 区分真实 done 和超时
+    const timeoutPromise = new Promise<typeof READ_TIMEOUT>((resolve) =>
+      setTimeout(() => resolve(READ_TIMEOUT), 15_000)
+    );
+    const readResult = await Promise.race([reader.read(), timeoutPromise]);
+
+    if (readResult === READ_TIMEOUT) {
+      continue;  // 超时无数据，继续等待（不 break，不会触发兜底）
+    }
+
+    const { done, value } = readResult;
+    if (done) break;  // 流真正结束
+    if (!value) continue;
 
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+    buffer = lines.pop() || '';  // 保留不完整的最后一行
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -378,25 +373,45 @@ ${userMessage}`;
 
       const dataStr = trimmed.slice(5).trim();
       if (dataStr === '[DONE]') {
-        yield { chunk: '', done: true, conversationId: convId };
+        yield { type: 'done', data: convId };
         return;
       }
 
       try {
         const data = JSON.parse(dataStr);
-        if (data.conversation_id) convId = data.conversation_id;
 
-        // answer / verbose / follow_up 都可能包含有效回复内容
-        if ((data.type === 'answer' || data.type === 'verbose') && data.content) {
-          const text = typeof data.content === 'string' ? data.content : extractContent({ content: data.content });
-          const cleaned = cleanContent(text);
-          if (cleaned) yield { chunk: cleaned, done: false, conversationId: convId };
+        // 🔑 收到 conversation_id 立即 yield
+        if (data.conversation_id && !firstConvYielded) {
+          convId = data.conversation_id;
+          firstConvYielded = true;
+          yield { type: 'conv_id', data: convId };
         }
-        // follow_up 类型：Bot 建议/追问，提取为回复附言
+
+        // answer（累积全文） / delta（增量 token） — verbose 是内部思考，仅日志调试
+        if ((data.type === 'answer' || data.type === 'delta') && data.content != null) {
+          let text: string;
+          if (typeof data.content === 'string') {
+            text = data.content;
+          } else if (data.content.type === 'text' && typeof data.content.text === 'string') {
+            text = data.content.text;
+          } else {
+            text = extractContent({ content: data.content });
+          }
+          // answer 是累积全文 → ChatPage 整体替换；delta 是增量 → ChatPage 逐次追加
+          if (text) yield { type: data.type === 'answer' ? 'answer_full' : 'text', data: text };
+        }
+
+        // follow_up 类型
         if (data.type === 'follow_up' && data.content) {
-          const text = typeof data.content === 'string' ? data.content : extractContent({ content: data.content });
-          const cleaned = cleanContent(text);
-          if (cleaned) yield { chunk: `\n\n💭 ${cleaned}`, done: false, conversationId: convId };
+          let text: string;
+          if (typeof data.content === 'string') {
+            text = data.content;
+          } else if (data.content.type === 'text' && typeof data.content.text === 'string') {
+            text = data.content.text;
+          } else {
+            text = extractContent({ content: data.content });
+          }
+          if (text) yield { type: 'text', data: `\n\n💭 ${text}` };
         }
       } catch {
         // 跳过解析失败的行
@@ -404,7 +419,27 @@ ${userMessage}`;
     }
   }
 
-  yield { chunk: '', done: true, conversationId: convId };
+  // 超时降级：用 message/list 兜底拉取
+  if (convId) {
+    try {
+      const listUrl = `https://api.coze.cn/v3/chat/message/list?conversation_id=${convId}`;
+      const listResp = await fetch(listUrl, {
+        headers: {
+          'Authorization': `Bearer ${getCozeConfig().token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (listResp.ok) {
+        const listData = await listResp.json();
+        if (listData.code === 0 && Array.isArray(listData.data) && listData.data.length > 0) {
+          const fallback = extractLatestAnswerFromMessages(listData.data);
+          if (fallback) yield { type: 'text', data: fallback };
+        }
+      }
+    } catch { /* 忽略 */ }
+  }
+
+  yield { type: 'done', data: convId };
 }
 
 // 获取 Coze 会话历史
