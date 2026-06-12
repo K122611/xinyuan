@@ -1,6 +1,6 @@
 {
   "name": "xinyuan-emo-mate",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "心元 EMO-Mate - 有温度的AI情感陪伴助手",
   "type": "module",
   "main": "electron/main.cjs",
@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.xinyuan.emomate",
     "productName": "心元 EMO-Mate",
+    "npmRebuild": false,
     "directories": {
       "output": "release",
       "buildResources": "public"
