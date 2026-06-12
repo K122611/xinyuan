@@ -1,5 +1,5 @@
 node_modules/
-# dist/  (构建产物，electron-builder 打包需要)
+dist/
 dist-electron/
 release/
 .env
