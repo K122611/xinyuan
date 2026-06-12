@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   isElectron: true,
-  appVersion: require('../package.json').version,
+  appVersion: '1.0.7',
   openChat: () => ipcRenderer.invoke('main:show'),
   moveWindow: (dx, dy) => ipcRenderer.send('pet:move-window', { dx, dy }),
 });

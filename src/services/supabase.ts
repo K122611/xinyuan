@@ -151,51 +151,33 @@ export interface ConversationRecord {
   message_count: number;
 }
 
-/** 同步单条对话到 Supabase（按 session_id upsert） */
-export async function syncConversation(conv: ConversationRecord) {
-  const userId = (await supabase.auth.getUser()).data.user?.id;
-  if (!userId) {
-    console.warn('[Supabase] syncConversation 跳过：未登录');
-    return;
-  }
-  try {
-    const { error } = await supabase
-      .from('conversations')
-      .upsert({
-        user_id: userId,
-        session_id: conv.session_id,
-        coze_conversation_id: conv.coze_conversation_id || null,
-        coze_chat_id: conv.coze_chat_id || null,
-        started_at: conv.started_at,
-        last_active: conv.last_active,
-        message_count: conv.message_count,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'session_id' });
-    if (error) console.warn('[Supabase] syncConversation 失败:', error.message);
-  } catch (err) {
-    console.error('[Supabase] syncConversation 异常:', err);
-  }
+/** 同步单条对话到 Supabase（按 session_id upsert）
+ *  @param userId - 从 Zustand 内存中取的 user.id，避免独立 HTTP 请求
+ */
+export async function syncConversation(conv: ConversationRecord, userId: string) {
+  const { error } = await supabase
+    .from('conversations')
+    .upsert({
+      user_id: userId,
+      session_id: conv.session_id,
+      coze_conversation_id: conv.coze_conversation_id || null,
+      coze_chat_id: conv.coze_chat_id || null,
+      started_at: conv.started_at,
+      last_active: conv.last_active,
+      message_count: conv.message_count,
+    }, { onConflict: 'user_id,session_id' });
+  if (error) throw new Error(`syncConversation: ${error.message} (code=${error.code})`);
 }
 
 /** 拉取当前用户所有对话 */
-export async function fetchConversations(): Promise<ConversationRecord[]> {
-  const userId = (await supabase.auth.getUser()).data.user?.id;
-  if (!userId) return [];
-  try {
-    const { data, error } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('user_id', userId)
-      .order('last_active', { ascending: false });
-    if (error) {
-      console.warn('[Supabase] fetchConversations 失败:', error.message);
-      return [];
-    }
-    return (data || []) as ConversationRecord[];
-  } catch (err) {
-    console.error('[Supabase] fetchConversations 异常:', err);
-    return [];
-  }
+export async function fetchConversations(userId: string): Promise<ConversationRecord[]> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('user_id', userId)
+    .order('last_active', { ascending: false });
+  if (error) throw new Error(`fetchConversations: ${error.message} (code=${error.code})`);
+  return (data || []) as ConversationRecord[];
 }
 
 export interface MessageRecord {
@@ -210,50 +192,60 @@ export interface MessageRecord {
   created_at: string;
 }
 
-/** 同步单条消息到 Supabase（按 message_local_id upsert） */
-export async function syncMessage(msg: MessageRecord) {
-  const userId = (await supabase.auth.getUser()).data.user?.id;
-  if (!userId) {
-    console.warn('[Supabase] syncMessage 跳过：未登录');
-    return;
-  }
-  try {
-    const { error } = await supabase
-      .from('chat_messages')
-      .upsert({
-        user_id: userId,
-        session_id: msg.session_id,
-        message_local_id: msg.message_local_id,
-        role: msg.role,
-        content: msg.content,
-        emotion_score: msg.emotion_score ?? null,
-        emotion_label: msg.emotion_label ?? null,
-        created_at: msg.created_at,
-      }, { onConflict: 'message_local_id' });
-    if (error) console.warn('[Supabase] syncMessage 失败:', error.message);
-  } catch (err) {
-    console.error('[Supabase] syncMessage 异常:', err);
-  }
+/** 同步单条消息到 Supabase（按 message_local_id upsert）
+ *  @param userId - 从 Zustand 内存中取的 user.id，避免独立 HTTP 请求
+ */
+export async function syncMessage(msg: MessageRecord, userId: string) {
+  const { error } = await supabase
+    .from('chat_messages')
+    .upsert({
+      user_id: userId,
+      session_id: msg.session_id,
+      message_local_id: msg.message_local_id,
+      role: msg.role,
+      content: msg.content,
+      emotion_score: msg.emotion_score ?? null,
+      emotion_label: msg.emotion_label ?? null,
+      created_at: msg.created_at,
+    }, { onConflict: 'user_id,message_local_id' });
+  if (error) throw new Error(`syncMessage: ${error.message} (code=${error.code})`);
 }
 
 /** 拉取指定对话的所有消息 */
-export async function fetchMessages(sessionId: string): Promise<MessageRecord[]> {
-  const userId = (await supabase.auth.getUser()).data.user?.id;
-  if (!userId) return [];
+export async function fetchMessages(sessionId: string, userId: string): Promise<MessageRecord[]> {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`fetchMessages: ${error.message} (code=${error.code})`);
+  return (data || []) as MessageRecord[];
+}
+
+// ============ 诊断 ============
+
+/** 检查同步表是否存在并返回诊断信息 */
+export async function checkSyncReady(userId: string): Promise<{ ok: boolean; message: string }> {
   try {
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
-    if (error) {
-      console.warn('[Supabase] fetchMessages 失败:', error.message);
-      return [];
+    const { error: e1 } = await supabase.from('conversations').select('id').limit(1);
+    if (e1) {
+      if ((e1 as any).code === '42P01') {
+        return { ok: false, message: 'conversations 表不存在 — 请在 Supabase SQL Editor 中执行 supabase_migration.sql' };
+      }
+      return { ok: false, message: `conversations 表查询失败: ${e1.message}` };
     }
-    return (data || []) as MessageRecord[];
-  } catch (err) {
-    console.error('[Supabase] fetchMessages 异常:', err);
-    return [];
+
+    const { error: e2 } = await supabase.from('chat_messages').select('id').limit(1);
+    if (e2) {
+      if ((e2 as any).code === '42P01') {
+        return { ok: false, message: 'chat_messages 表不存在 — 请在 Supabase SQL Editor 中执行 supabase_migration.sql' };
+      }
+      return { ok: false, message: `chat_messages 表查询失败: ${e2.message}` };
+    }
+
+    return { ok: true, message: '同步就绪 ✓' };
+  } catch (err: any) {
+    return { ok: false, message: `诊断异常: ${err.message}` };
   }
 }

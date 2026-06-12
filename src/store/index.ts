@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { PetAction } from '@/utils/petActionParser';
 import { syncMessage, syncConversation, fetchConversations, fetchMessages } from '@/services/supabase';
@@ -95,11 +94,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         started_at: session?.started_at || new Date().toISOString(),
         last_active: session?.last_active || new Date().toISOString(),
         message_count: session?.message_count || 0,
-      }).catch(() => {});
+      }, userId).catch(err => _logSyncError('setCozeConvId', err));
     }
   },
   getCozeConvId: (sessionId) => get().cozeConvMap[sessionId],
-
   cozeChatMap: storage.get('cozeChatMap', {}),
   setCozeChatId: (sessionId, chatId) => {
     const map = { ...get().cozeChatMap, [sessionId]: chatId };
@@ -119,7 +117,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         started_at: session?.started_at || new Date().toISOString(),
         last_active: session?.last_active || new Date().toISOString(),
         message_count: session?.message_count || 0,
-      }).catch(() => {});
+      }, userId).catch(err => _logSyncError('setCozeChatId', err));
     }
   },
   getCozeChatId: (sessionId) => get().cozeChatMap[sessionId],
@@ -197,10 +195,27 @@ interface Session {
 // 防抖消息同步 timer 映射
 const _msgSyncTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
+/** 记录同步错误到 localStorage，方便调试 */
+function _logSyncError(ctx: string, err: any) {
+  console.error(`[Sync:${ctx}]`, err);
+  try {
+    const key = `xinyuan_${storage.getUserId()}_syncErrors`;
+    const prev = JSON.parse(localStorage.getItem(key) || '[]');
+    prev.push({ time: new Date().toISOString(), ctx, message: err?.message || String(err) });
+    if (prev.length > 50) prev.splice(0, prev.length - 50);
+    localStorage.setItem(key, JSON.stringify(prev));
+  } catch {}
+}
+
 /** 异步同步一条消息到 Supabase（不影响 UI） */
 function _syncOneMessage(msg: Message) {
   const userId = storage.getUserId();
-  if (!userId || userId === 'anonymous') return;
+  console.log('[Sync] _syncOneMessage 触发 | userId:', userId, '| msgId:', msg.id, '| role:', msg.role);
+  if (!userId || userId === 'anonymous') {
+    console.warn('[Sync] ⚠️ 跳过同步（用户未登录或匿名）');
+    return;
+  }
+  console.log('[Sync] 开始同步消息:', { session_id: msg.session_id, message_local_id: msg.id, role: msg.role });
   syncMessage({
     session_id: msg.session_id,
     message_local_id: msg.id,
@@ -209,13 +224,22 @@ function _syncOneMessage(msg: Message) {
     emotion_score: msg.emotion_score ?? undefined,
     emotion_label: msg.emotion_label ?? undefined,
     created_at: msg.created_at || new Date().toISOString(),
-  }).catch(() => {});
+  }, userId).then(() => {
+    console.log('[Sync] ✅ 消息同步成功:', msg.id);
+  }).catch(err => {
+    console.error('[Sync] ❌ 消息同步失败:', err);
+    _logSyncError('message', err);
+  });
 }
 
 /** 异步同步一条对话元数据到 Supabase */
 function _syncConversation(session: Session) {
   const userId = storage.getUserId();
-  if (!userId || userId === 'anonymous') return;
+  console.log('[Sync] _syncConversation 触发 | userId:', userId, '| sessionId:', session.session_id);
+  if (!userId || userId === 'anonymous') {
+    console.warn('[Sync] ⚠️ 跳过会话同步（用户未登录或匿名）');
+    return;
+  }
   const convMap: Record<string, string> = storage.get('cozeConvMap', {});
   const chatMap: Record<string, string> = storage.get('cozeChatMap', {});
   syncConversation({
@@ -225,7 +249,12 @@ function _syncConversation(session: Session) {
     started_at: session.started_at,
     last_active: session.last_active,
     message_count: session.message_count,
-  }).catch(() => {});
+  }, userId).then(() => {
+    console.log('[Sync] ✅ 会话同步成功:', session.session_id);
+  }).catch(err => {
+    console.error('[Sync] ❌ 会话同步失败:', err);
+    _logSyncError('conversation', err);
+  });
 }
 
 interface ChatState {
@@ -253,7 +282,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 异步从 Supabase 拉取远程消息并合并
     const userId = storage.getUserId();
     if (userId && userId !== 'anonymous') {
-      fetchMessages(sessionId).then(remoteMsgs => {
+      fetchMessages(sessionId, userId).then(remoteMsgs => {
         if (remoteMsgs.length > 0) {
           // 重新获取最新的 allMessages（可能已被其他操作修改）
           const all = storage.get('allMessages', []) as Message[];
@@ -281,7 +310,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             set({ messages: merged });
           }
         }
-      }).catch(() => {});
+      }).catch(err => _logSyncError('fetchMessages', err));
     }
   },
 
@@ -346,7 +375,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 🔄 异步从 Supabase 拉取远程会话并合并
     const userId = storage.getUserId();
     if (userId && userId !== 'anonymous') {
-      fetchConversations().then(remoteConvs => {
+      fetchConversations(userId).then(remoteConvs => {
         if (remoteConvs.length > 0) {
           const convMap = new Map<string, Session>();
           for (const s of localSessions) convMap.set(s.session_id, s);
@@ -389,7 +418,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           storage.set('sessions', merged);
           set({ sessions: merged });
         }
-      }).catch(() => {});
+      }).catch(err => _logSyncError('fetchConversations', err));
     }
   },
 
