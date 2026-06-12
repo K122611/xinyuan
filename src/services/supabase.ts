@@ -135,3 +135,125 @@ export function onAuthStateChange(callback: (user: any | null) => void) {
     callback(session?.user ?? null);
   });
 }
+
+// ============================================================
+// 跨设备对话同步 —— 对话 & 消息
+// ============================================================
+
+export interface ConversationRecord {
+  id?: string;
+  user_id?: string;
+  session_id: string;
+  coze_conversation_id?: string | null;
+  coze_chat_id?: string | null;
+  started_at: string;
+  last_active: string;
+  message_count: number;
+}
+
+/** 同步单条对话到 Supabase（按 session_id upsert） */
+export async function syncConversation(conv: ConversationRecord) {
+  const userId = (await supabase.auth.getUser()).data.user?.id;
+  if (!userId) {
+    console.warn('[Supabase] syncConversation 跳过：未登录');
+    return;
+  }
+  try {
+    const { error } = await supabase
+      .from('conversations')
+      .upsert({
+        user_id: userId,
+        session_id: conv.session_id,
+        coze_conversation_id: conv.coze_conversation_id || null,
+        coze_chat_id: conv.coze_chat_id || null,
+        started_at: conv.started_at,
+        last_active: conv.last_active,
+        message_count: conv.message_count,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'session_id' });
+    if (error) console.warn('[Supabase] syncConversation 失败:', error.message);
+  } catch (err) {
+    console.error('[Supabase] syncConversation 异常:', err);
+  }
+}
+
+/** 拉取当前用户所有对话 */
+export async function fetchConversations(): Promise<ConversationRecord[]> {
+  const userId = (await supabase.auth.getUser()).data.user?.id;
+  if (!userId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('user_id', userId)
+      .order('last_active', { ascending: false });
+    if (error) {
+      console.warn('[Supabase] fetchConversations 失败:', error.message);
+      return [];
+    }
+    return (data || []) as ConversationRecord[];
+  } catch (err) {
+    console.error('[Supabase] fetchConversations 异常:', err);
+    return [];
+  }
+}
+
+export interface MessageRecord {
+  id?: string;
+  user_id?: string;
+  session_id: string;
+  message_local_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  emotion_score?: number | null;
+  emotion_label?: string | null;
+  created_at: string;
+}
+
+/** 同步单条消息到 Supabase（按 message_local_id upsert） */
+export async function syncMessage(msg: MessageRecord) {
+  const userId = (await supabase.auth.getUser()).data.user?.id;
+  if (!userId) {
+    console.warn('[Supabase] syncMessage 跳过：未登录');
+    return;
+  }
+  try {
+    const { error } = await supabase
+      .from('chat_messages')
+      .upsert({
+        user_id: userId,
+        session_id: msg.session_id,
+        message_local_id: msg.message_local_id,
+        role: msg.role,
+        content: msg.content,
+        emotion_score: msg.emotion_score ?? null,
+        emotion_label: msg.emotion_label ?? null,
+        created_at: msg.created_at,
+      }, { onConflict: 'message_local_id' });
+    if (error) console.warn('[Supabase] syncMessage 失败:', error.message);
+  } catch (err) {
+    console.error('[Supabase] syncMessage 异常:', err);
+  }
+}
+
+/** 拉取指定对话的所有消息 */
+export async function fetchMessages(sessionId: string): Promise<MessageRecord[]> {
+  const userId = (await supabase.auth.getUser()).data.user?.id;
+  if (!userId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.warn('[Supabase] fetchMessages 失败:', error.message);
+      return [];
+    }
+    return (data || []) as MessageRecord[];
+  } catch (err) {
+    console.error('[Supabase] fetchMessages 异常:', err);
+    return [];
+  }
+}

@@ -31,6 +31,21 @@ const WANDER_MESSAGES = [
   '喵~', '好无聊哦', '唱首歌吧♪', '(*^▽^*)',
 ];
 
+// ============ System A (PetGarden SHOP_ITEMS) → System B (outfitStore OutfitItems) ID 映射 ============
+// 主窗口 PetGarden 使用 SHOP_ITEMS (store/index.ts)，桌宠使用 DEFAULT_OUTFITS (store/outfitStore.ts)
+// 两套系统数据独立，此映射让主窗口装备也能在桌宠上显示
+const SHOP_TO_OUTFIT_MAP: Record<string, string> = {
+  'sunglasses': 'sunglasses',   // 🕶️ → 🕶️
+  'crown':      'crown',         // 👑 → 👑
+  'ribbon':     'bowknot',       // 🎀 → 🎀 (蝴蝶结)
+  'scarf':      'scarf',         // 🧣 → 🧣
+  'flower':     'flowercrown',   // 🌸 → 🌸 (鲜花背景)
+  'sparkles':   'starmark',      // ✨ → ✨ (星光背景)
+  'hearts':     'hearts_bg',     // 💕 → 💕 (爱心背景)
+  'bowtie':     'bowtie',        // 🎀 → 🎀 (领结)
+  'hat':        'tophat',        // 🎩 → 🎩 (礼帽)
+};
+
 export default function FloatingPetPage() {
   const wanderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -64,6 +79,33 @@ export default function FloatingPetPage() {
 
   // 启动时加载持久化 pet 数据 + 装扮数据
   useEffect(() => { loadPet(); loadOutfits(); }, []); // eslint-disable-line
+
+  // ============ 跨窗口同步：storage 事件 + polling 兜底 + focus 即时刷新 ============
+  useEffect(() => {
+    // polling：每 2 秒检测一次（保证可靠同步）
+    const poll = setInterval(() => {
+      loadPet();
+      loadOutfits();
+    }, 2000);
+    // storage 事件：其他窗口修改时立即响应
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key.includes('_pet') || e.key === 'xinyuan_pet') loadPet();
+      if (e.key === 'xinyuan_outfit_data') loadOutfits();
+    };
+    // focus 事件：切换回桌面宠物窗口时立即刷新
+    const onFocus = () => {
+      loadPet();
+      loadOutfits();
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(poll);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [loadPet, loadOutfits]);
 
   // ============ IPC 监听：主窗口 → 宠物动作 ============
   const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -210,38 +252,73 @@ export default function FloatingPetPage() {
             cursor: 'grab',
           }}
         >
-          {/* 宠物本体 */}
-          <div
-            className={targetAction !== 'idle' ? actionVisual.animationClass : ''}
-            style={{
-              fontSize: 32,
-              lineHeight: 1,
-              filter: `drop-shadow(0 2px 6px ${actionVisual.color}44)`,
-              marginBottom: 2,
-              transition: 'filter 0.5s',
-            }}
-          >
-            {targetAction !== 'idle' ? actionVisual.emoji : petEmoji}
-          </div>
+          {/* 宠物 + 装扮容器（共享 relative 定位基准） */}
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            {/* 宠物本体 */}
+            <div
+              className={targetAction !== 'idle' ? actionVisual.animationClass : ''}
+              style={{
+                fontSize: 32,
+                lineHeight: 1,
+                filter: `drop-shadow(0 2px 6px ${actionVisual.color}44)`,
+                marginBottom: 2,
+                transition: 'filter 0.5s',
+              }}
+            >
+              {targetAction !== 'idle' ? actionVisual.emoji : petEmoji}
+            </div>
 
-          {/* 装饰品 - 装备后显示在正确位置 */}
-          {Object.entries(equipped).length > 0 && (
-            <div style={{ position: 'absolute', top: 0, left: '50%', pointerEvents: 'none' }}>
+            {/* 装饰品 — 合并 System B (outfitStore.equipped) + System A (pet.accessories) */}
+            {(Object.keys(equipped).length > 0 || pet.accessories.length > 0) && (
+            <div style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              pointerEvents: 'none',
+            }}>
+              {/* ===== System B: outfitStore 精确定位装备 ===== */}
               {Object.entries(equipped).map(([category, outfitId]) => {
                 const outfit = getOutfitById(outfitId as string);
                 if (!outfit || outfit.category === 'background') return null;
+                // offsetY 为 48px 预览设计，按 32/48≈0.667 缩放 / translateX 居中（不做 translateY）
+                const top = outfit.offsetY ? Math.round(outfit.offsetY * 0.667) : 0;
                 return (
-                  <div
-                    key={category}
-                    className="pet-preview-outfit"
+                  <div key={`outfit-${category}`}
                     style={{
                       position: 'absolute',
-                      top: outfit.offsetY ?? -18,
-                      left: outfit.offsetX ? `calc(50% + ${outfit.offsetX}px)` : '50%',
-                      transform: `translateX(-50%) scale(${outfit.scale ?? 1})`,
-                      fontSize: 28,
-                    }}
-                  >
+                      top,
+                      left: 0,
+                      width: '100%',
+                      textAlign: 'center',
+                      fontSize: 28, lineHeight: 1,
+                      transform: `scale(${outfit.scale ?? 1})`,
+                      filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.3))',
+                      transition: 'all 0.3s ease',
+                    }}>
+                    {outfit.emoji}
+                  </div>
+                );
+              })}
+              {/* ===== System A: pet.accessories 通过映射桥接 ===== */}
+              {pet.accessories.map((accId) => {
+                const mappedId = SHOP_TO_OUTFIT_MAP[accId];
+                if (!mappedId) return null;
+                const outfit = getOutfitById(mappedId);
+                if (!outfit) return null;
+                if (equipped[outfit.category] === mappedId) return null;
+                const top = outfit.offsetY ? Math.round(outfit.offsetY * 0.667) : 0;
+                return (
+                  <div key={`acc-${accId}`}
+                    style={{
+                      position: 'absolute',
+                      top,
+                      left: 0,
+                      width: '100%',
+                      textAlign: 'center',
+                      fontSize: 28, lineHeight: 1,
+                      transform: `scale(${outfit.scale ?? 1})`,
+                      filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.3))',
+                      transition: 'all 0.3s ease',
+                    }}>
                     {outfit.emoji}
                   </div>
                 );
@@ -251,11 +328,11 @@ export default function FloatingPetPage() {
                 <div
                   style={{
                     position: 'absolute',
-                    top: -30,
+                    top: '50%',
                     left: '50%',
-                    transform: 'translateX(-50%)',
+                    transform: 'translate(-50%, -50%)',
                     fontSize: 60,
-                    opacity: 0.25,
+                    opacity: 0.2,
                     pointerEvents: 'none',
                   }}
                 >
@@ -263,7 +340,8 @@ export default function FloatingPetPage() {
                 </div>
               )}
             </div>
-          )}
+            )}
+          </div>
 
           {/* 情绪标签 + 动作标签 */}
           <div

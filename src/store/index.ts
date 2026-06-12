@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { PetAction } from '@/utils/petActionParser';
+import { syncMessage, syncConversation, fetchConversations, fetchMessages } from '@/services/supabase';
 
 // ============ 简易本地存储适配器（按用户隔离） ============
 let _getAuthUserId: (() => string) | null = null;
@@ -79,6 +81,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     const map = { ...get().cozeConvMap, [sessionId]: convId };
     storage.set('cozeConvMap', map);
     set({ cozeConvMap: map });
+
+    // 同步对话到 Supabase（含 Coze conversation_id）
+    const userId = storage.getUserId();
+    if (userId && userId !== 'anonymous') {
+      const sessions: any[] = storage.get('sessions', []);
+      const session = sessions.find((s: any) => s.session_id === sessionId);
+      const chatMap: Record<string, string> = storage.get('cozeChatMap', {});
+      syncConversation({
+        session_id: sessionId,
+        coze_conversation_id: convId,
+        coze_chat_id: chatMap[sessionId] || null,
+        started_at: session?.started_at || new Date().toISOString(),
+        last_active: session?.last_active || new Date().toISOString(),
+        message_count: session?.message_count || 0,
+      }).catch(() => {});
+    }
   },
   getCozeConvId: (sessionId) => get().cozeConvMap[sessionId],
 
@@ -87,6 +105,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     const map = { ...get().cozeChatMap, [sessionId]: chatId };
     storage.set('cozeChatMap', map);
     set({ cozeChatMap: map });
+
+    // 同步对话到 Supabase（含 Coze chat_id）
+    const userId = storage.getUserId();
+    if (userId && userId !== 'anonymous') {
+      const sessions: any[] = storage.get('sessions', []);
+      const session = sessions.find((s: any) => s.session_id === sessionId);
+      const convMap: Record<string, string> = storage.get('cozeConvMap', {});
+      syncConversation({
+        session_id: sessionId,
+        coze_conversation_id: convMap[sessionId] || null,
+        coze_chat_id: chatId,
+        started_at: session?.started_at || new Date().toISOString(),
+        last_active: session?.last_active || new Date().toISOString(),
+        message_count: session?.message_count || 0,
+      }).catch(() => {});
+    }
   },
   getCozeChatId: (sessionId) => get().cozeChatMap[sessionId],
   // 方案B：悬浮窗控制
@@ -160,6 +194,40 @@ interface Session {
   message_count: number;
 }
 
+// 防抖消息同步 timer 映射
+const _msgSyncTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+/** 异步同步一条消息到 Supabase（不影响 UI） */
+function _syncOneMessage(msg: Message) {
+  const userId = storage.getUserId();
+  if (!userId || userId === 'anonymous') return;
+  syncMessage({
+    session_id: msg.session_id,
+    message_local_id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    emotion_score: msg.emotion_score ?? undefined,
+    emotion_label: msg.emotion_label ?? undefined,
+    created_at: msg.created_at || new Date().toISOString(),
+  }).catch(() => {});
+}
+
+/** 异步同步一条对话元数据到 Supabase */
+function _syncConversation(session: Session) {
+  const userId = storage.getUserId();
+  if (!userId || userId === 'anonymous') return;
+  const convMap: Record<string, string> = storage.get('cozeConvMap', {});
+  const chatMap: Record<string, string> = storage.get('cozeChatMap', {});
+  syncConversation({
+    session_id: session.session_id,
+    coze_conversation_id: convMap[session.session_id] || null,
+    coze_chat_id: chatMap[session.session_id] || null,
+    started_at: session.started_at,
+    last_active: session.last_active,
+    message_count: session.message_count,
+  }).catch(() => {});
+}
+
 interface ChatState {
   messages: Message[];
   isLoading: boolean;
@@ -177,9 +245,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sessions: storage.get('sessions', []),
 
   loadHistory: (sessionId) => {
+    // 先从 localStorage 加载（立即渲染）
     const allMessages: Message[] = storage.get('allMessages', []);
     const msgs = allMessages.filter((m: Message) => m.session_id === sessionId);
     set({ messages: msgs });
+
+    // 异步从 Supabase 拉取远程消息并合并
+    const userId = storage.getUserId();
+    if (userId && userId !== 'anonymous') {
+      fetchMessages(sessionId).then(remoteMsgs => {
+        if (remoteMsgs.length > 0) {
+          // 重新获取最新的 allMessages（可能已被其他操作修改）
+          const all = storage.get('allMessages', []) as Message[];
+          const localMsgIds = new Set(all.map(m => m.id));
+          let hasNew = false;
+          for (const rm of remoteMsgs) {
+            if (!localMsgIds.has(rm.message_local_id)) {
+              all.push({
+                id: rm.message_local_id,
+                session_id: rm.session_id,
+                role: rm.role,
+                content: rm.content,
+                emotion_score: rm.emotion_score ?? undefined,
+                emotion_label: rm.emotion_label ?? undefined,
+                created_at: rm.created_at,
+              });
+              hasNew = true;
+            }
+          }
+          if (hasNew) {
+            storage.set('allMessages', all);
+            // 恢复 Coze conversation_id 映射
+            const remoteConv = remoteMsgs.length > 0 ? null : null; // 由 fetchConversations 处理
+            const merged = all.filter((m: Message) => m.session_id === sessionId);
+            set({ messages: merged });
+          }
+        }
+      }).catch(() => {});
+    }
   },
 
   addMessage: (msg) => {
@@ -205,6 +308,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
     storage.set('sessions', sessions);
 
+    // 🔄 异步同步到 Supabase（不影响 UI 渲染）
+    _syncOneMessage(msg);
+    const conv = sessions.find(s => s.session_id === msg.session_id);
+    if (conv) _syncConversation(conv);
+
     set((s) => ({
       messages: [...s.messages, msg],
       sessions: [...sessions],
@@ -217,14 +325,72 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (idx >= 0) allMessages[idx].content = content;
     storage.set('allMessages', allMessages);
 
+    // 🔄 防抖同步到 Supabase（流式输出期间 500ms 触发一次即可）
+    clearTimeout(_msgSyncTimers[id]);
+    _msgSyncTimers[id] = setTimeout(() => {
+      delete _msgSyncTimers[id];
+      const msg = allMessages.find((m: Message) => m.id === id);
+      if (msg) _syncOneMessage(msg);
+    }, 500);
+
     set((s) => ({
       messages: s.messages.map((m) => (m.id === id ? { ...m, content } : m)),
     }));
   },
 
   loadSessions: () => {
-    const sessions = storage.get('sessions', []);
-    set({ sessions });
+    // 先从 localStorage 加载
+    const localSessions: Session[] = storage.get('sessions', []);
+    set({ sessions: localSessions });
+
+    // 🔄 异步从 Supabase 拉取远程会话并合并
+    const userId = storage.getUserId();
+    if (userId && userId !== 'anonymous') {
+      fetchConversations().then(remoteConvs => {
+        if (remoteConvs.length > 0) {
+          const convMap = new Map<string, Session>();
+          for (const s of localSessions) convMap.set(s.session_id, s);
+          for (const rc of remoteConvs) {
+            if (!convMap.has(rc.session_id)) {
+              convMap.set(rc.session_id, {
+                session_id: rc.session_id,
+                started_at: rc.started_at,
+                last_active: rc.last_active,
+                message_count: rc.message_count,
+              });
+            } else {
+              const local = convMap.get(rc.session_id)!;
+              if (new Date(rc.last_active) > new Date(local.last_active)) {
+                local.last_active = rc.last_active;
+              }
+              if (rc.message_count > local.message_count) {
+                local.message_count = rc.message_count;
+              }
+            }
+            // 恢复 Coze conversation_id / chat_id 映射
+            if (rc.coze_conversation_id) {
+              const convMapData: Record<string, string> = storage.get('cozeConvMap', {});
+              if (!convMapData[rc.session_id]) {
+                convMapData[rc.session_id] = rc.coze_conversation_id;
+                storage.set('cozeConvMap', convMapData);
+              }
+            }
+            if (rc.coze_chat_id) {
+              const chatMapData: Record<string, string> = storage.get('cozeChatMap', {});
+              if (!chatMapData[rc.session_id]) {
+                chatMapData[rc.session_id] = rc.coze_chat_id;
+                storage.set('cozeChatMap', chatMapData);
+              }
+            }
+          }
+          const merged = Array.from(convMap.values()).sort(
+            (a, b) => new Date(b.last_active).getTime() - new Date(a.last_active).getTime()
+          );
+          storage.set('sessions', merged);
+          set({ sessions: merged });
+        }
+      }).catch(() => {});
+    }
   },
 
   setLoading: (loading) => set({ isLoading: loading }),
@@ -265,6 +431,30 @@ export const SHOP_ITEMS: AccessoryItem[] = [
   { id: 'hat',        name: '礼帽', emoji: '🎩', price: 250, category: 'head',   description: '优雅的黑色礼帽' },
   { id: 'cat_ears',   name: '猫耳', emoji: '🐱', price: 180, category: 'head',   description: '更可爱的猫耳头饰' },
 ];
+// ============ System A → System B 装扮同步（PetGarden 装备 → 桌宠显示） ============
+const SHOP_TO_OUTFIT_MAP: Record<string, string> = {
+  "sunglasses": "sunglasses", "crown": "crown", "ribbon": "bowknot",
+  "scarf": "scarf", "flower": "flowercrown", "sparkles": "starmark",
+  "hearts": "hearts_bg", "bowtie": "bowtie", "hat": "tophat", "cat_ears": "catear",
+};
+const SHOP_CATEGORY_TO_OUTFIT: Record<string, string> = {
+  "sunglasses": "accessory", "crown": "hat", "ribbon": "hat",
+  "scarf": "clothes", "flower": "background", "sparkles": "background",
+  "hearts": "background", "bowtie": "clothes", "hat": "hat",
+};
+function syncPetToOutfit(petAccessories: string[]) {
+  try {
+    const equipped: Record<string, string> = {};
+    for (const accId of petAccessories) {
+      const outfitId = SHOP_TO_OUTFIT_MAP[accId];
+      const category = SHOP_CATEGORY_TO_OUTFIT[accId];
+      if (outfitId && category) equipped[category] = outfitId;
+    }
+    const raw = localStorage.getItem("xinyuan_outfit_data");
+    const existing = raw ? JSON.parse(raw) : {};
+    localStorage.setItem("xinyuan_outfit_data", JSON.stringify({ ...existing, equipped }));
+  } catch {}
+}
 
 interface PetState {
   pet: { mood: string; energy: number; level: number; exp: number; skin: string; accessories: string[] };
@@ -329,6 +519,7 @@ export const usePetStore = create<PetState>((set, get) => ({
     if (!pet.accessories.includes(itemId)) {
       pet.accessories = [...pet.accessories, itemId];
       storage.set('pet', pet);
+      syncPetToOutfit(pet.accessories);
       set({ pet });
     }
   },
@@ -337,13 +528,14 @@ export const usePetStore = create<PetState>((set, get) => ({
     const pet = { ...get().pet };
     pet.accessories = pet.accessories.filter(id => id !== itemId);
     storage.set('pet', pet);
+    syncPetToOutfit(pet.accessories);
     set({ pet });
   },
 
   isAccessoryEquipped: (itemId: string) => {
     return get().pet.accessories.includes(itemId);
   },
-	  setPetMood: (mood) => {
+		  setPetMood: (mood) => {
     const pet = { ...get().pet, mood };
     storage.set('pet', pet);
     set({ pet });
@@ -672,3 +864,5 @@ export const useMilestoneStore = create<MilestoneState>((set) => ({
     set({ milestones });
   },
 }));
+
+export * from './outfitStore';

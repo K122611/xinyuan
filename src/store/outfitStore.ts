@@ -25,30 +25,29 @@ const DEFAULT_OUTFITS: OutfitItem[] = [
   // --- 帽子类 ---
   { id: 'crown',     name: '皇冠',   emoji: '👑', category: 'hat',    rarity: 'legendary', description: '闪烁的宝石皇冠，王者的象征',    price: 500, unlocked: false, offsetY: -28 },
   { id: 'tophat',    name: '礼帽',   emoji: '🎩', category: 'hat',    rarity: 'epic',      description: '优雅的黑色礼帽，绅士首选',        price: 300, unlocked: false, offsetY: -26 },
-  { id: 'bowknot',   name: '蝴蝶结', emoji: '🎀', category: 'hat',    rarity: 'rare',      description: '可爱的粉色蝴蝶结',                   price: 150, unlocked: false, offsetY: -20 },
-  { id: 'catear',    name: '猫耳',   emoji: '🐱', category: 'hat',    rarity: 'rare',      description: '毛茸茸的猫耳朵，喵~',                 price: 200, unlocked: false, offsetY: -18 },
+  { id: 'bowknot',   name: '蝴蝶结', emoji: '🎀', category: 'hat',    rarity: 'rare',      description: '可爱的粉色蝴蝶结',                   price: 150, unlocked: false, offsetY: -16, scale: 0.7 },
   { id: 'wizardhat', name: '魔法帽', emoji: '🧙', category: 'hat',    rarity: 'epic',      description: '蕴含神秘力量的尖顶魔法帽',           price: 350, unlocked: false, offsetY: -30 },
-  { id: 'flowercrown',name:'花环',   emoji: '🌸', category: 'hat',    rarity: 'common',    description: '鲜花编织的美丽花环',                 price: 80,  unlocked: true,  offsetY: -16 },
   { id: 'chefhat',   name: '厨师帽', emoji: '👨‍🍳', category: 'hat',   rarity: 'common',    description: '洁白蓬松的厨师帽',                   price: 100, unlocked: true,  offsetY: -24 },
 
   // --- 面部装饰 ---
   { id: 'sunglasses',name: '墨镜',   emoji: '🕶️', category: 'accessory', rarity: 'rare',   description: '酷酷的黑色墨镜，气场全开',           price: 180, unlocked: false, offsetY: -5 },
   { id: 'monocle',   name: '单片镜', emoji: '🧐', category: 'accessory', rarity: 'common', description: '精致的单片眼镜，学者气质',           price: 60,  unlocked: true,  offsetY: -4 },
-  { id: 'starmark',  name: '星光',   emoji: '✨', category: 'accessory', rarity: 'common', description: '闪烁的星芒特效',                       price: 50,  unlocked: true,  offsetY: -8 },
   { id: 'hearteyes', name: '爱心眼', emoji: '😍', category: 'accessory', rarity: 'rare',   description: '扑通扑通的心动眼神',                 price: 120, unlocked: false, offsetY: -6 },
   { id: 'blush',     name: '腮红',   emoji: '😊', category: 'accessory', rarity: 'common', description: '可爱的害羞腮红',                       price: 40,  unlocked: true,  offsetY: -2 },
   { id: 'mask',      name: '面具',   emoji: '🎭', category: 'accessory', rarity: 'epic',   description: '神秘的双面戏剧面具',                 price: 280, unlocked: false, offsetY: -6 },
 
   // --- 身体服饰 ---
-  { id: 'scarf',     name: '围巾',   emoji: '🧣', category: 'clothes', rarity: 'common', description: '温暖的针织围巾',                       price: 70,  unlocked: true,  offsetY: 12,  scale: 0.8 },
-  { id: 'bowtie',    name: '领结',   emoji: '🎀', category: 'clothes', rarity: 'common', description: '精致的蝴蝶领结',                       price: 60,  unlocked: true,  offsetY: 6,   scale: 0.7 },
+  { id: 'scarf',     name: '围巾',   emoji: '🧣', category: 'clothes', rarity: 'common', description: '温暖的针织围巾',                       price: 70,  unlocked: true,  offsetY: 10, scale: 0.8 },
+  { id: 'bowtie',    name: '领结',   emoji: '🎀', category: 'clothes', rarity: 'common', description: '精致的蝴蝶领结',                       price: 60,  unlocked: true,  offsetY: 10, scale: 0.7 },
   { id: 'cape',      name: '披风',   emoji: '🦸', category: 'clothes', rarity: 'epic',   description: '帅气的超级英雄披风',                 price: 320, unlocked: false, offsetY: 16,  scale: 1.2 },
   { id: 'raincoat',  name: '雨衣',   emoji: '☔', category: 'clothes', rarity: 'rare',    description: '可爱的黄色小雨衣',                     price: 160, unlocked: false, offsetY: 14,  scale: 1.0 },
   { id: 'kimono',    name: '和服',   emoji: '👘', category: 'clothes', rarity: 'epic',    description: '典雅的传统日式和服',                 price: 400, unlocked: false, offsetY: 18,  scale: 1.3 },
   { id: 'tshirt',    name: 'T恤',    emoji: '👕', category: 'clothes', rarity: 'common',  description: '舒适的纯棉T恤',                       price: 50,  unlocked: true,  offsetY: 10,  scale: 0.9 },
 
   // --- 背景特效 ---
-  { id: 'sparkle_bg', name: '星光背景', emoji: '🌌', category: 'background', rarity: 'epic',   description: '璀璨星空的梦幻背景',           price: 250, unlocked: false },
+  { id: 'sparkle_bg', name: '星空背景', emoji: '🌌', category: 'background', rarity: 'epic',   description: '璀璨星空的梦幻背景',           price: 250, unlocked: false },
+  { id: 'starmark',   name: '星光背景', emoji: '✨', category: 'background', rarity: 'common',  description: '闪烁的星芒背景特效',           price: 100, unlocked: true  },
+  { id: 'flowercrown',name:'鲜花背景', emoji: '🌸', category: 'background', rarity: 'common',  description: '盛开的鲜花背景特效',           price: 100, unlocked: true  },
   { id: 'rainbow_bg', name: '彩虹背景', emoji: '🌈', category: 'background', rarity: 'rare',   description: '七色彩虹的温暖背景',           price: 200, unlocked: false },
   { id: 'hearts_bg',  name: '爱心背景', emoji: '💕', category: 'background', rarity: 'common', description: '满满爱心的甜蜜背景',           price: 100, unlocked: true  },
 
@@ -193,6 +192,32 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           coins,
         })
       );
+      // 反向同步 → PetGarden pet.accessories
+      const OUTFIT_TO_SHOP: Record<string, string> = {
+        'sunglasses': 'sunglasses', 'crown': 'crown', 'bowknot': 'ribbon',
+        'scarf': 'scarf', 'flowercrown': 'flower', 'starmark': 'sparkles',
+        'hearts_bg': 'hearts', 'bowtie': 'bowtie', 'tophat': 'hat',
+      };
+      const accessories = Object.values(equipped)
+        .map((id) => OUTFIT_TO_SHOP[id])
+        .filter(Boolean);
+      if (accessories.length > 0) {
+        // 扫描所有 xinyuan_*_pet 键并更新
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.includes('_pet')) {
+            try {
+              const petData = JSON.parse(localStorage.getItem(key)!);
+              if (petData && Array.isArray(petData.accessories)) {
+                // 合并：保留已有 + 新增 outfilt 映射的
+                const merged = [...new Set([...petData.accessories, ...accessories])];
+                petData.accessories = merged;
+                localStorage.setItem(key, JSON.stringify(petData));
+              }
+            } catch {}
+          }
+        }
+      }
     } catch {}
   },
 
