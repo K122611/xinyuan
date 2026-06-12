@@ -1,0 +1,259 @@
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// 懒初始化：避免 import 时因环境变量缺失直接崩溃
+let _supabase: SupabaseClient | null = null;
+
+export function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('[Supabase] 缺少环境变量 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY');
+    }
+    _supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        storage: localStorage,
+      },
+    });
+  }
+  return _supabase;
+}
+
+// 兼容旧引用（懒初始化）
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop) { return (getSupabase() as any)[prop]; },
+  set(_, prop, value) { return ((getSupabase() as any)[prop] = value), true; },
+  has(_, prop) { return prop in getSupabase(); },
+  getOwnPropertyDescriptor(_, prop) {
+    return Object.getOwnPropertyDescriptor(getSupabase(), prop);
+  },
+  ownKeys() { return Reflect.ownKeys(getSupabase()); },
+  getPrototypeOf() { return Object.getPrototypeOf(getSupabase()); },
+  apply(_, thisArg, args) { return (getSupabase() as any).apply(thisArg, args); },
+});
+
+// ============ 同步 profiles（登录后补写） ============
+export async function syncProfile(userId: string, username: string) {
+  console.log('[Supabase] syncProfile:', { id: userId, username });
+  try {
+    // 先检查是否已有记录
+    const { data: existing } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
+    console.log('[Supabase] 检查已有记录:', existing ? '存在' : '不存在');
+
+    if (existing) {
+      // UPDATE 已有记录
+      const { error } = await supabase
+        .from('profiles')
+        .update({ username, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      if (error) console.warn('[Supabase] profiles UPDATE 失败:', error.message, '(code:', (error as any).code, ')');
+      else console.log('[Supabase] profiles UPDATE 成功');
+    } else {
+      // INSERT 新记录
+      const { error } = await supabase
+        .from('profiles')
+        .insert({ id: userId, username, updated_at: new Date().toISOString() });
+      if (error) console.warn('[Supabase] profiles INSERT 失败:', error.message, '(code:', (error as any).code, ')');
+      else console.log('[Supabase] profiles INSERT 成功');
+    }
+  } catch (err) {
+    console.error('[Supabase] syncProfile 异常:', err);
+  }
+}
+
+// ============ 注册 ============
+export async function signUp(email: string, password: string, username?: string) {
+  console.log('[Supabase] signUp 开始:', { email, username });
+  const options: any = {};
+  if (username) {
+    options.data = { username, display_name: username };
+  }
+
+  const { data, error } = await supabase.auth.signUp({ email, password, options });
+  console.log('[Supabase] signUp 响应:', {
+    user: !!data.user,
+    session: !!data.session,
+    error: error?.message || null,
+    emailConfirmed: data.user?.email_confirmed_at || data.user?.confirmed_at || null,
+    identities: data.user?.identities?.length ?? 0,
+  });
+  if (error) throw error;
+
+  // 注册后写入 profiles：必须等有 session 才能通过 RLS 校验
+  if (data.user && username) {
+    if (!data.session) {
+      console.warn('[Supabase] 注册后无 session（邮件确认开启），profiles 写入推迟到首次登录');
+    } else {
+      console.log('[Supabase] 写入 profiles:', { id: data.user.id, username });
+      try {
+        const { error: profileError } = await supabase.from('profiles').upsert(
+          { id: data.user.id, username, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        );
+        if (profileError) console.warn('[Supabase] profiles 写入失败:', profileError.message);
+        else console.log('[Supabase] profiles 写入成功');
+      } catch (err) {
+        console.error('[Supabase] profiles upsert 异常:', err);
+      }
+    }
+  }
+  return data;
+}
+
+// ============ 登录 ============
+export async function signIn(email: string, password: string) {
+  console.log('[Supabase] signIn 开始:', { email });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  console.log('[Supabase] signIn 响应:', {
+    user: !!data.user,
+    session: !!data.session,
+    error: error?.message || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// ============ 登出 ============
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
+// ============ 获取当前用户 ============
+export async function getCurrentUser() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) return null;
+  return user;
+}
+
+// ============ 监听认证状态变化 ============
+export function onAuthStateChange(callback: (user: any | null) => void) {
+  return supabase.auth.onAuthStateChange((_event, session) => {
+    callback(session?.user ?? null);
+  });
+}
+
+// ============================================================
+// 跨设备对话同步 —— 对话 & 消息
+// ============================================================
+
+export interface ConversationRecord {
+  id?: string;
+  user_id?: string;
+  session_id: string;
+  coze_conversation_id?: string | null;
+  coze_chat_id?: string | null;
+  started_at: string;
+  last_active: string;
+  message_count: number;
+}
+
+/** 同步单条对话到 Supabase（按 session_id upsert） */
+export async function syncConversation(conv: ConversationRecord) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return; // 未登录，静默跳过
+  const { error } = await supabase
+    .from('conversations')
+    .upsert({
+      user_id: user.id,
+      session_id: conv.session_id,
+      coze_conversation_id: conv.coze_conversation_id || null,
+      coze_chat_id: conv.coze_chat_id || null,
+      started_at: conv.started_at,
+      last_active: conv.last_active,
+      message_count: conv.message_count,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'session_id' });
+  if (error) throw new Error(`syncConversation: ${error.message} (code=${error.code})`);
+}
+
+/** 拉取当前用户所有对话 */
+export async function fetchConversations(): Promise<ConversationRecord[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('last_active', { ascending: false });
+  if (error) throw new Error(`fetchConversations: ${error.message} (code=${error.code})`);
+  return (data || []) as ConversationRecord[];
+}
+
+export interface MessageRecord {
+  id?: string;
+  user_id?: string;
+  session_id: string;
+  message_local_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  emotion_score?: number | null;
+  emotion_label?: string | null;
+  created_at: string;
+}
+
+/** 同步单条消息到 Supabase（按 message_local_id upsert） */
+export async function syncMessage(msg: MessageRecord) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return; // 未登录，静默跳过
+  const { error } = await supabase
+    .from('chat_messages')
+    .upsert({
+      user_id: user.id,
+      session_id: msg.session_id,
+      message_local_id: msg.message_local_id,
+      role: msg.role,
+      content: msg.content,
+      emotion_score: msg.emotion_score ?? null,
+      emotion_label: msg.emotion_label ?? null,
+      created_at: msg.created_at,
+    }, { onConflict: 'message_local_id' });
+  if (error) throw new Error(`syncMessage: ${error.message} (code=${error.code})`);
+}
+
+/** 拉取指定对话的所有消息 */
+export async function fetchMessages(sessionId: string): Promise<MessageRecord[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('user_id', user!.id)
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`fetchMessages: ${error.message} (code=${error.code})`);
+  return (data || []) as MessageRecord[];
+}
+
+// ============ 诊断 ============
+
+/** 检查同步表是否存在并返回诊断信息 */
+export async function checkSyncReady(): Promise<{ ok: boolean; message: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: '未登录 Supabase，无法同步' };
+
+  try {
+    const { error: e1 } = await supabase.from('conversations').select('id').limit(1);
+    if (e1) {
+      if ((e1 as any).code === '42P01') {
+        return { ok: false, message: 'conversations 表不存在 — 请在 Supabase SQL Editor 中执行 supabase_migration.sql' };
+      }
+      return { ok: false, message: `conversations 表查询失败: ${e1.message}` };
+    }
+
+    const { error: e2 } = await supabase.from('chat_messages').select('id').limit(1);
+    if (e2) {
+      if ((e2 as any).code === '42P01') {
+        return { ok: false, message: 'chat_messages 表不存在 — 请在 Supabase SQL Editor 中执行 supabase_migration.sql' };
+      }
+      return { ok: false, message: `chat_messages 表查询失败: ${e2.message}` };
+    }
+
+    return { ok: true, message: '同步就绪 ✓' };
+  } catch (err: any) {
+    return { ok: false, message: `诊断异常: ${err.message}` };
+  }
+}

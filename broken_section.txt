@@ -1,0 +1,25 @@
+    if (userId && userId !== 'anonymous') {
+      const sessions: any[] = storage.get('sessions', []);
+      const session = sessions.find((s: any) => s.session_id === sessionId);
+      const chatMap: Record<string, string> = storage.get('cozeChatMap', {});
+      syncConversation({
+        session_id: sessionId,
+        coze_conversation_id: convId,
+        coze_chat_id: chatMap[sessionId] || null,
+        started_at: session?.started_at || new Date().toISOString(),
+        last_active: session?.last_active || new Date().toISOString(),
+        message_count: session?.message_count || 0,
+      }, userId).catch(err => _logSyncError('setCozeConvId', err));
+
+  cozeChatMap: storage.get('cozeChatMap', {}),
+  setCozeChatId: (sessionId, chatId) => {
+    const map = { ...get().cozeChatMap, [sessionId]: chatId };
+    storage.set('cozeChatMap', map);
+    set({ cozeChatMap: map });
+
+    // 同步对话到 Supabase（含 Coze chat_id）
+    const userId = storage.getUserId();
+    if (userId && userId !== 'anonymous') {
+      const sessions: any[] = storage.get('sessions', []);
+      const session = sessions.find((s: any) => s.session_id === sessionId);
+      const convMap: Record<string, string> = storage.get('cozeConvMap', {});

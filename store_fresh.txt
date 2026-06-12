@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { PetAction } from '@/utils/petActionParser';
 import { syncMessage, syncConversation, fetchConversations, fetchMessages } from '@/services/supabase';
@@ -94,10 +95,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         started_at: session?.started_at || new Date().toISOString(),
         last_active: session?.last_active || new Date().toISOString(),
         message_count: session?.message_count || 0,
-      }, userId).catch(err => _logSyncError('setCozeConvId', err));
+      }).catch(err => _logSyncError('setCozeConvId', err));
     }
   },
   getCozeConvId: (sessionId) => get().cozeConvMap[sessionId],
+
   cozeChatMap: storage.get('cozeChatMap', {}),
   setCozeChatId: (sessionId, chatId) => {
     const map = { ...get().cozeChatMap, [sessionId]: chatId };
@@ -117,7 +119,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         started_at: session?.started_at || new Date().toISOString(),
         last_active: session?.last_active || new Date().toISOString(),
         message_count: session?.message_count || 0,
-      }, userId).catch(err => _logSyncError('setCozeChatId', err));
+      }).catch(err => _logSyncError('setCozeChatId', err));
     }
   },
   getCozeChatId: (sessionId) => get().cozeChatMap[sessionId],
@@ -210,12 +212,7 @@ function _logSyncError(ctx: string, err: any) {
 /** 异步同步一条消息到 Supabase（不影响 UI） */
 function _syncOneMessage(msg: Message) {
   const userId = storage.getUserId();
-  console.log('[Sync] _syncOneMessage 触发 | userId:', userId, '| msgId:', msg.id, '| role:', msg.role);
-  if (!userId || userId === 'anonymous') {
-    console.warn('[Sync] ⚠️ 跳过同步（用户未登录或匿名）');
-    return;
-  }
-  console.log('[Sync] 开始同步消息:', { session_id: msg.session_id, message_local_id: msg.id, role: msg.role });
+  if (!userId || userId === 'anonymous') return;
   syncMessage({
     session_id: msg.session_id,
     message_local_id: msg.id,
@@ -224,22 +221,13 @@ function _syncOneMessage(msg: Message) {
     emotion_score: msg.emotion_score ?? undefined,
     emotion_label: msg.emotion_label ?? undefined,
     created_at: msg.created_at || new Date().toISOString(),
-  }, userId).then(() => {
-    console.log('[Sync] ✅ 消息同步成功:', msg.id);
-  }).catch(err => {
-    console.error('[Sync] ❌ 消息同步失败:', err);
-    _logSyncError('message', err);
-  });
+  }, userId).catch(err => _logSyncError('message', err));
 }
 
 /** 异步同步一条对话元数据到 Supabase */
 function _syncConversation(session: Session) {
   const userId = storage.getUserId();
-  console.log('[Sync] _syncConversation 触发 | userId:', userId, '| sessionId:', session.session_id);
-  if (!userId || userId === 'anonymous') {
-    console.warn('[Sync] ⚠️ 跳过会话同步（用户未登录或匿名）');
-    return;
-  }
+  if (!userId || userId === 'anonymous') return;
   const convMap: Record<string, string> = storage.get('cozeConvMap', {});
   const chatMap: Record<string, string> = storage.get('cozeChatMap', {});
   syncConversation({
@@ -249,12 +237,7 @@ function _syncConversation(session: Session) {
     started_at: session.started_at,
     last_active: session.last_active,
     message_count: session.message_count,
-  }, userId).then(() => {
-    console.log('[Sync] ✅ 会话同步成功:', session.session_id);
-  }).catch(err => {
-    console.error('[Sync] ❌ 会话同步失败:', err);
-    _logSyncError('conversation', err);
-  });
+  }).catch(err => _logSyncError('conversation', err));
 }
 
 interface ChatState {
@@ -282,7 +265,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 异步从 Supabase 拉取远程消息并合并
     const userId = storage.getUserId();
     if (userId && userId !== 'anonymous') {
-      fetchMessages(sessionId, userId).then(remoteMsgs => {
+      fetchMessages(sessionId).then(remoteMsgs => {
         if (remoteMsgs.length > 0) {
           // 重新获取最新的 allMessages（可能已被其他操作修改）
           const all = storage.get('allMessages', []) as Message[];
@@ -375,7 +358,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 🔄 异步从 Supabase 拉取远程会话并合并
     const userId = storage.getUserId();
     if (userId && userId !== 'anonymous') {
-      fetchConversations(userId).then(remoteConvs => {
+      fetchConversations().then(remoteConvs => {
         if (remoteConvs.length > 0) {
           const convMap = new Map<string, Session>();
           for (const s of localSessions) convMap.set(s.session_id, s);
@@ -719,24 +702,9 @@ export const useEmotionStore = create<EmotionState>((set, get) => ({
     set({ currentMood: log.label });
     get().loadToday();
     get().loadWeekly();
-    // 同步情绪到 Supabase 供搭子匹配
-    const userId = storage.getUserId();
-    if (userId && userId !== 'anonymous') {
-      import('@/services/supabase').then(({ updateProfileEmotion }) => {
-        updateProfileEmotion(userId, log.label).catch(() => {});
-      });
-    }
   },
 
-  setCurrentMood: (mood) => {
-    set({ currentMood: mood });
-    const userId = storage.getUserId();
-    if (userId && userId !== 'anonymous') {
-      import('@/services/supabase').then(({ updateProfileEmotion }) => {
-        updateProfileEmotion(userId, mood).catch(() => {});
-      });
-    }
-  },
+  setCurrentMood: (mood) => set({ currentMood: mood }),
 }));
 
 // ============ 人格 Store ============
@@ -768,240 +736,84 @@ export const usePersonaStore = create<PersonaState>((set) => ({
 }));
 
 // ============ 搭子 Store ============
-import {
-  searchMates,
-  sendFriendRequest,
-  getFriendRequests,
-  respondFriendRequest,
-  getFriends,
-  getFriendshipId,
-  sendFriendMessage as supabaseSendFriendMessage,
-  getFriendMessages,
-  updateProfileEmotion,
-  type MateProfile,
-  type FriendRequestRecord,
-  type FriendRecord,
-  type FriendMessageRecord,
-} from '@/services/supabase';
-
 interface MateMatch {
-  id: number;              // friends 表的 id (friendship_id)
-  mate_id: string;         // 对方 user_id
+  id: string;
+  mate_id: string;
   mate_nickname: string;
-  mate_emotion_label?: string;
   match_mode: string;
+  status: string;
   created_at: string;
 }
 
 interface MateMessage {
-  id: number | string;     // 数据库 id 或本地临时 id
-  match_id: number;        // friendship_id
+  id: string;
+  match_id: string;
   sender_role: 'me' | 'mate' | 'system';
   content: string;
   created_at?: string;
 }
 
 interface MateState {
-  // 好友列表
-  mates: MateMatch[];
-  // 收到的好友申请
-  incomingRequests: FriendRequestRecord[];
-  // 发出的好友申请（to_user_id -> status）
-  outgoingRequests: Record<string, string>;
-  // 活跃聊天
-  activeMateId: number | null;  // friendship_id
-  activeMateUserId: string | null; // 对方 user_id
+  matches: MateMatch[];
+  activeMatchId: string | null;
   messages: MateMessage[];
-  // 搜索
-  searchResults: MateProfile[];
-  isSearching: boolean;
-
-  // 操作
-  loadMates: () => Promise<void>;
-  loadIncomingRequests: () => Promise<void>;
-  searchForMates: (mode: string, myEmotionLabel?: string) => Promise<void>;
-  requestMate: (toUserId: string, toUsername: string, message?: string) => Promise<void>;
-  acceptRequest: (requestId: number, fromUserId: string, fromUsername: string) => Promise<void>;
-  rejectRequest: (requestId: number) => Promise<void>;
-  setActiveMate: (friendshipId: number | null, mateUserId?: string | null) => void;
-  loadMateMessages: (friendshipId: number) => Promise<void>;
-  sendMessage: (content: string) => Promise<void>;
-  updateMyEmotion: (label: string, tags?: string) => Promise<void>;
-  clearSearch: () => void;
+  loadMatches: () => void;
+  createMatch: (data: { mateId: string; mateNickname: string; matchMode: string }) => void;
+  endMatch: (matchId: string) => void;
+  setActiveMatch: (id: string | null) => void;
+  loadMessages: (matchId: string) => void;
+  addMessage: (msg: MateMessage) => void;
 }
 
 export const useMateStore = create<MateState>((set, get) => ({
-  mates: [],
-  incomingRequests: [],
-  outgoingRequests: {},
-  activeMateId: null,
-  activeMateUserId: null,
+  matches: storage.get('mateMatches', []),
+  activeMatchId: null,
   messages: [],
-  searchResults: [],
-  isSearching: false,
 
-  loadMates: async () => {
-    const userId = storage.getUserId();
-    if (!userId || userId === 'anonymous') return;
-    try {
-      const friends = await getFriends(userId);
-      const mates: MateMatch[] = friends.map(f => ({
-        id: f.id,
-        mate_id: f.friend_id,
-        mate_nickname: f.friend_username || '未知用户',
-        mate_emotion_label: f.friend_emotion_label || undefined,
-        match_mode: 'resonance', // TODO: 存储匹配模式
-        created_at: f.created_at,
-      }));
-      set({ mates });
-    } catch (err) {
-      console.error('[MateStore] loadMates 失败:', err);
-    }
+  loadMatches: () => {
+    const matches = storage.get('mateMatches', []);
+    set({ matches });
   },
 
-  loadIncomingRequests: async () => {
-    const userId = storage.getUserId();
-    if (!userId || userId === 'anonymous') return;
-    try {
-      const requests = await getFriendRequests(userId);
-      set({ incomingRequests: requests });
-    } catch (err) {
-      console.error('[MateStore] loadIncomingRequests 失败:', err);
-    }
-  },
-
-  searchForMates: async (mode, myEmotionLabel) => {
-    const userId = storage.getUserId();
-    if (!userId || userId === 'anonymous') return;
-    set({ isSearching: true, searchResults: [] });
-    try {
-      const results = await searchMates(userId, mode, myEmotionLabel);
-      // 过滤掉已经是好友的人
-      const existingMateIds = new Set(get().mates.map(m => m.mate_id));
-      // 过滤掉已经发出申请的人
-      const pendingIds = new Set(Object.keys(get().outgoingRequests));
-      const filtered = results.filter(
-        r => !existingMateIds.has(r.id) && !pendingIds.has(r.id)
-      );
-      set({ searchResults: filtered, isSearching: false });
-    } catch (err) {
-      console.error('[MateStore] searchForMates 失败:', err);
-      set({ isSearching: false });
-    }
-  },
-
-  requestMate: async (toUserId, toUsername, message) => {
-    const userId = storage.getUserId();
-    if (!userId || userId === 'anonymous') return;
-    try {
-      await sendFriendRequest(userId, toUserId, message || `Hi ${toUsername}，想和你成为搭子~`);
-      // 记录已发出
-      set(s => ({
-        outgoingRequests: { ...s.outgoingRequests, [toUserId]: 'pending' },
-        // 从搜索结果中移除
-        searchResults: s.searchResults.filter(r => r.id !== toUserId),
-      }));
-    } catch (err) {
-      console.error('[MateStore] requestMate 失败:', err);
-      throw err;
-    }
-  },
-
-  acceptRequest: async (requestId, fromUserId, fromUsername) => {
-    const userId = storage.getUserId();
-    if (!userId || userId === 'anonymous') return;
-    try {
-      await respondFriendRequest(requestId, true, fromUserId, userId);
-      // 重新加载好友列表和申请列表
-      await get().loadMates();
-      await get().loadIncomingRequests();
-    } catch (err) {
-      console.error('[MateStore] acceptRequest 失败:', err);
-    }
-  },
-
-  rejectRequest: async (requestId) => {
-    const userId = storage.getUserId();
-    if (!userId || userId === 'anonymous') return;
-    try {
-      // 需要 fromUserId 和 toUserId，从当前申请列表中找到
-      const req = get().incomingRequests.find(r => r.id === requestId);
-      if (!req) return;
-      await respondFriendRequest(requestId, false, req.from_user_id, userId);
-      // 从列表中移除
-      set(s => ({
-        incomingRequests: s.incomingRequests.filter(r => r.id !== requestId),
-      }));
-    } catch (err) {
-      console.error('[MateStore] rejectRequest 失败:', err);
-    }
-  },
-
-  setActiveMate: (friendshipId, mateUserId) => {
-    set({
-      activeMateId: friendshipId,
-      activeMateUserId: mateUserId || null,
-      messages: [],
-    });
-  },
-
-  loadMateMessages: async (friendshipId) => {
-    try {
-      const msgs = await getFriendMessages(friendshipId);
-      const userId = storage.getUserId();
-      const mapped: MateMessage[] = msgs.map(m => ({
-        id: m.id,
-        match_id: m.friendship_id,
-        sender_role: m.sender_id === userId ? 'me' : 'mate',
-        content: m.content,
-        created_at: m.created_at,
-      }));
-      set({ messages: mapped });
-    } catch (err) {
-      console.error('[MateStore] loadMateMessages 失败:', err);
-    }
-  },
-
-  sendMessage: async (content) => {
-    const { activeMateId, activeMateUserId } = get();
-    const userId = storage.getUserId();
-    if (!activeMateId || !userId || userId === 'anonymous') return;
-
-    // 乐观更新：立即显示消息
-    const tempId = `temp_${Date.now()}`;
-    const tempMsg: MateMessage = {
-      id: tempId,
-      match_id: activeMateId,
-      sender_role: 'me',
-      content,
+  createMatch: (data) => {
+    const match: MateMatch = {
+      id: uuidv4(),
+      mate_id: data.mateId,
+      mate_nickname: data.mateNickname,
+      match_mode: data.matchMode,
+      status: 'active',
       created_at: new Date().toISOString(),
     };
-    set(s => ({ messages: [...s.messages, tempMsg] }));
-
-    try {
-      await supabaseSendFriendMessage(activeMateId, userId, content);
-      // 重新加载以获取真实 id
-      await get().loadMateMessages(activeMateId);
-    } catch (err) {
-      console.error('[MateStore] sendMessage 失败:', err);
-      // 移除乐观更新的消息
-      set(s => ({
-        messages: s.messages.filter(m => m.id !== tempId),
-      }));
-    }
+    const matches = [...storage.get('mateMatches', []), match];
+    storage.set('mateMatches', matches);
+    set({ matches, activeMatchId: match.id });
   },
 
-  updateMyEmotion: async (label, tags) => {
-    const userId = storage.getUserId();
-    if (!userId || userId === 'anonymous') return;
-    try {
-      await updateProfileEmotion(userId, label, tags);
-    } catch (err) {
-      console.error('[MateStore] updateMyEmotion 失败:', err);
-    }
+  endMatch: (matchId) => {
+    const matches = storage.get('mateMatches', []).map((m: MateMatch) =>
+      m.id === matchId ? { ...m, status: 'ended', ended_at: new Date().toISOString() } : m
+    );
+    storage.set('mateMatches', matches);
+    set({ matches, activeMatchId: null, messages: [] });
   },
 
-  clearSearch: () => set({ searchResults: [], isSearching: false }),
+  setActiveMatch: (id) => {
+    set({ activeMatchId: id });
+    if (id) get().loadMessages(id);
+  },
+
+  loadMessages: (matchId) => {
+    const allMsg: MateMessage[] = storage.get('mateMessages', []);
+    const msgs = allMsg.filter((m: MateMessage) => m.match_id === matchId);
+    set({ messages: msgs });
+  },
+
+  addMessage: (msg) => {
+    const allMsg: MateMessage[] = storage.get('mateMessages', []);
+    allMsg.push(msg);
+    storage.set('mateMessages', allMsg);
+    set((s) => ({ messages: [...s.messages, msg] }));
+  },
 }));
 
 // ============ 记忆锚点 Store ============
