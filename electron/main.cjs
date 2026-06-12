@@ -58,7 +58,7 @@ function createMainWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    mainWindow.webContents.openDevTools({ mode: 'bottom' });
+    if (isDev) mainWindow.webContents.openDevTools({ mode: 'bottom' });
   });
 
   mainWindow.on('close', (e) => {
