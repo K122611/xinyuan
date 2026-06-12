@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { usePetStore, SHOP_ITEMS } from '../store';
+import { usePetStore } from '../store';
+import { useOutfitStore } from '../store/outfitStore';
+import OutfitShop from '../components/OutfitShop';
 import { petIPC } from '@/services/petIPC';
 import { PetAction, ACTION_VISUALS } from '@/utils/petActionParser';
 
@@ -38,6 +40,15 @@ export default function FloatingPetPage() {
   const targetAction = usePetStore((s) => s.targetAction);
   const setTargetAction = usePetStore((s) => s.setTargetAction);
 
+  // ============ 装扮 Store ============
+  const {
+    isShopOpen,
+    setShopOpen,
+    equipped,
+    getOutfitById,
+    loadFromStorage: loadOutfits,
+  } = useOutfitStore();
+
   // ============ 本地 UI 状态 ============
   const [entranceDone, setEntranceDone] = useState(false);
   const [speechBubble, setSpeechBubble] = useState<string | null>(null);
@@ -51,8 +62,8 @@ export default function FloatingPetPage() {
   // 主应用修改 pet → 同步本地体力
   useEffect(() => { setLocalEnergy(pet.energy); }, [pet.energy]);
 
-  // 启动时加载持久化 pet 数据
-  useEffect(() => { loadPet(); }, []); // eslint-disable-line
+  // 启动时加载持久化 pet 数据 + 装扮数据
+  useEffect(() => { loadPet(); loadOutfits(); }, []); // eslint-disable-line
 
   // ============ IPC 监听：主窗口 → 宠物动作 ============
   const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -213,13 +224,44 @@ export default function FloatingPetPage() {
             {targetAction !== 'idle' ? actionVisual.emoji : petEmoji}
           </div>
 
-          {/* 装饰品 */}
-          {Array.isArray(pet.accessories) && pet.accessories.length > 0 && (
-            <div style={{ display: 'flex', gap: 2, justifyContent: 'center', fontSize: 13, marginTop: -4 }}>
-              {pet.accessories.map(id => {
-                const item = SHOP_ITEMS.find(i => i.id === id);
-                return item ? <span key={id} title={item.name}>{item.emoji}</span> : null;
+          {/* 装饰品 - 装备后显示在正确位置 */}
+          {Object.entries(equipped).length > 0 && (
+            <div style={{ position: 'absolute', top: 0, left: '50%', pointerEvents: 'none' }}>
+              {Object.entries(equipped).map(([category, outfitId]) => {
+                const outfit = getOutfitById(outfitId as string);
+                if (!outfit || outfit.category === 'background') return null;
+                return (
+                  <div
+                    key={category}
+                    className="pet-preview-outfit"
+                    style={{
+                      position: 'absolute',
+                      top: outfit.offsetY ?? -18,
+                      left: outfit.offsetX ? `calc(50% + ${outfit.offsetX}px)` : '50%',
+                      transform: `translateX(-50%) scale(${outfit.scale ?? 1})`,
+                      fontSize: 28,
+                    }}
+                  >
+                    {outfit.emoji}
+                  </div>
+                );
               })}
+              {/* 背景特效 */}
+              {equipped.background && getOutfitById(equipped.background) && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: -30,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    fontSize: 60,
+                    opacity: 0.25,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  {getOutfitById(equipped.background)!.emoji}
+                </div>
+              )}
             </div>
           )}
 
@@ -268,23 +310,43 @@ export default function FloatingPetPage() {
           >
             Lv.{pet.level} · {pet.exp} EXP
           </div>
+
+          {/* 装扮商店按钮 */}
+          <button
+            className="btn btn-secondary"
+            onClick={(e) => { e.stopPropagation(); setShopOpen(true); }}
+            style={{
+              fontSize: 12,
+              padding: '3px 12px',
+              borderRadius: 12,
+              border: '1px solid var(--glass-border)',
+              background: 'var(--glass-bg)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              color: '#ccc',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'var(--accent-calm)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#ccc'; e.currentTarget.style.borderColor = 'var(--glass-border)'; }}
+          >
+            🎨 装扮
+          </button>
         </div>
 
         {/* ===== 气泡 ===== */}
         {speechBubble && (
           <div
+            className="floating-speech-bubble"
             style={{
               position: 'absolute',
               bottom: -8,
               maxWidth: 220,
               padding: '8px 14px',
-              background: 'rgba(255,255,255,0.92)',
               borderRadius: 16,
               fontSize: 13,
-              color: '#444',
+              color: '#ccc',
               lineHeight: 1.5,
-              boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-              animation: 'bubbleIn 0.3s ease-out',
               textAlign: 'center',
               wordBreak: 'break-word',
               WebkitAppRegion: 'no-drag',
@@ -301,12 +363,29 @@ export default function FloatingPetPage() {
                 height: 0,
                 borderLeft: '6px solid transparent',
                 borderRight: '6px solid transparent',
-                borderBottom: '6px solid rgba(255,255,255,0.92)',
+                borderBottom: '6px solid var(--glass-bg)',
               }}
             />
           </div>
         )}
       </div>
+
+      {/* ===== 装扮商店面板 ===== */}
+      {isShopOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 60,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 100,
+            width: 320,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <OutfitShop />
+        </div>
+      )}
 
       {/* ===== CSS 动画 ===== */}
       <style>{`

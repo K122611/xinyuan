@@ -58,3 +58,14 @@ contextBridge.exposeInMainWorld('mainAPI', {
   isVisible: () => ipcRenderer.invoke('main:is-visible'),
   quit: () => ipcRenderer.invoke('app:quit'),
 });
+
+// ============ 装扮系统 API ============
+contextBridge.exposeInMainWorld('outfitAPI', {
+  getUnlocked: () => ipcRenderer.invoke('outfit:getUnlocked'),
+  unlock: (outfitId) => ipcRenderer.invoke('outfit:unlock', outfitId),
+  equip: (outfitId) => ipcRenderer.invoke('outfit:equip', outfitId),
+  unequip: (outfitId) => ipcRenderer.invoke('outfit:unequip', outfitId),
+  unequipAll: () => ipcRenderer.invoke('outfit:unequipAll'),
+  getCoins: () => ipcRenderer.invoke('outfit:getCoins'),
+  updateCoins: (amount) => ipcRenderer.invoke('outfit:updateCoins', amount),
+});

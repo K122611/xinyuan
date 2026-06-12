@@ -2,6 +2,18 @@ const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require
 const path = require('path');
 const fs = require('fs');
 
+// 装扮数据库（可选，如果 better-sqlite3 未安装则降级为 localStorage）
+let initOutfitDatabase, closeOutfitDatabase, setupOutfitIPC;
+try {
+  ({ initOutfitDatabase, closeOutfitDatabase } = require('./database'));
+  ({ setupOutfitIPC } = require('./outfitIPC'));
+} catch (e) {
+  console.warn('[Main] 装扮数据库未加载（使用 localStorage 兜底）:', e.message);
+  initOutfitDatabase = () => {};
+  closeOutfitDatabase = () => {};
+  setupOutfitIPC = () => {};
+}
+
 // ============ 窗口 & 托盘 ============
 let mainWindow = null;
 let petWindow = null;
@@ -217,9 +229,10 @@ function setupIPC() {
 
 // ============ 应用生命周期 ============
 app.whenReady().then(() => {
+  initOutfitDatabase();
+  setupOutfitIPC();
   setupIPC();
   createMainWindow();
-  // 桌宠窗口延迟创建：等用户认证后由渲染进程触发
   createTray();
 });
 
@@ -227,6 +240,7 @@ app.on('window-all-closed', () => {});
 
 app.on('before-quit', () => {
   isQuitting = true;
+  closeOutfitDatabase();
   if (petWindow) petWindow.destroy();
   if (tray) tray.destroy();
 });
