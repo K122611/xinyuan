@@ -785,8 +785,8 @@ import {
 } from '@/services/supabase';
 
 interface MateMatch {
-  id: number;              // friends 表的 id (friendship_id)
-  mate_id: string;         // 对方 user_id
+  id: string;               // channel_id（共享频道——双向一致）
+  mate_id: string;          // 对方 user_id
   mate_nickname: string;
   mate_emotion_label?: string;
   match_mode: string;
@@ -794,8 +794,8 @@ interface MateMatch {
 }
 
 interface MateMessage {
-  id: number | string;     // 数据库 id 或本地临时 id
-  match_id: number;        // friendship_id
+  id: number | string;      // 数据库 id 或本地临时 id
+  match_id: string;         // channel_id
   sender_role: 'me' | 'mate' | 'system';
   content: string;
   created_at?: string;
@@ -809,12 +809,13 @@ interface MateState {
   // 发出的好友申请（to_user_id -> status）
   outgoingRequests: Record<string, string>;
   // 活跃聊天
-  activeMateId: number | null;  // friendship_id
-  activeMateUserId: string | null; // 对方 user_id
+  activeMateId: string | null;      // channel_id
+  activeMateUserId: string | null;  // 对方 user_id
   messages: MateMessage[];
   // 搜索
   searchResults: MateProfile[];
   isSearching: boolean;
+  hasSearched: boolean;
 
   // 操作
   loadMates: () => Promise<void>;
@@ -823,8 +824,8 @@ interface MateState {
   requestMate: (toUserId: string, toUsername: string, message?: string) => Promise<void>;
   acceptRequest: (requestId: number, fromUserId: string, fromUsername: string) => Promise<void>;
   rejectRequest: (requestId: number) => Promise<void>;
-  setActiveMate: (friendshipId: number | null, mateUserId?: string | null) => void;
-  loadMateMessages: (friendshipId: number) => Promise<void>;
+  setActiveMate: (channelId: string | null, mateUserId?: string | null) => void;
+  loadMateMessages: (channelId: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   updateMyEmotion: (label: string, tags?: string) => Promise<void>;
   clearSearch: () => void;
@@ -839,6 +840,7 @@ export const useMateStore = create<MateState>((set, get) => ({
   messages: [],
   searchResults: [],
   isSearching: false,
+  hasSearched: false,
 
   loadMates: async () => {
     const userId = storage.getUserId();
@@ -846,11 +848,11 @@ export const useMateStore = create<MateState>((set, get) => ({
     try {
       const friends = await getFriends(userId);
       const mates: MateMatch[] = friends.map(f => ({
-        id: f.id,
+        id: f.channel_id,
         mate_id: f.friend_id,
         mate_nickname: f.friend_username || '未知用户',
         mate_emotion_label: f.friend_emotion_label || undefined,
-        match_mode: 'resonance', // TODO: 存储匹配模式
+        match_mode: 'resonance',
         created_at: f.created_at,
       }));
       set({ mates });
@@ -883,10 +885,10 @@ export const useMateStore = create<MateState>((set, get) => ({
       const filtered = results.filter(
         r => !existingMateIds.has(r.id) && !pendingIds.has(r.id)
       );
-      set({ searchResults: filtered, isSearching: false });
+      set({ searchResults: filtered, isSearching: false, hasSearched: true });
     } catch (err) {
       console.error('[MateStore] searchForMates 失败:', err);
-      set({ isSearching: false });
+      set({ isSearching: false, hasSearched: true });
     }
   },
 
@@ -911,12 +913,25 @@ export const useMateStore = create<MateState>((set, get) => ({
     const userId = storage.getUserId();
     if (!userId || userId === 'anonymous') return;
     try {
-      await respondFriendRequest(requestId, true, fromUserId, userId);
-      // 重新加载好友列表和申请列表
+      const resp = await respondFriendRequest(requestId, true, fromUserId, userId);
+      // 立即本地加入搭子列表（用返回的 channel_id）
+      if (resp?.channel_id) {
+        set(s => ({
+          mates: [...s.mates.filter(m => m.mate_id !== fromUserId), {
+            id: resp.channel_id,
+            mate_id: fromUserId,
+            mate_nickname: fromUsername,
+            match_mode: 'resonance',
+            created_at: new Date().toISOString(),
+          }],
+        }));
+      }
+      // 刷新完整列表
       await get().loadMates();
       await get().loadIncomingRequests();
     } catch (err) {
       console.error('[MateStore] acceptRequest 失败:', err);
+      throw err;
     }
   },
 
@@ -937,21 +952,21 @@ export const useMateStore = create<MateState>((set, get) => ({
     }
   },
 
-  setActiveMate: (friendshipId, mateUserId) => {
+  setActiveMate: (channelId, mateUserId) => {
     set({
-      activeMateId: friendshipId,
+      activeMateId: channelId,
       activeMateUserId: mateUserId || null,
       messages: [],
     });
   },
 
-  loadMateMessages: async (friendshipId) => {
+  loadMateMessages: async (channelId) => {
     try {
-      const msgs = await getFriendMessages(friendshipId);
+      const msgs = await getFriendMessages(channelId);
       const userId = storage.getUserId();
       const mapped: MateMessage[] = msgs.map(m => ({
         id: m.id,
-        match_id: m.friendship_id,
+        match_id: m.channel_id || channelId,
         sender_role: m.sender_id === userId ? 'me' : 'mate',
         content: m.content,
         created_at: m.created_at,
@@ -963,7 +978,7 @@ export const useMateStore = create<MateState>((set, get) => ({
   },
 
   sendMessage: async (content) => {
-    const { activeMateId, activeMateUserId } = get();
+    const { activeMateId } = get();
     const userId = storage.getUserId();
     if (!activeMateId || !userId || userId === 'anonymous') return;
 
@@ -1001,7 +1016,7 @@ export const useMateStore = create<MateState>((set, get) => ({
     }
   },
 
-  clearSearch: () => set({ searchResults: [], isSearching: false }),
+  clearSearch: () => set({ searchResults: [], isSearching: false, hasSearched: false }),
 }));
 
 // ============ 记忆锚点 Store ============

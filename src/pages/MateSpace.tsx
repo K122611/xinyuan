@@ -18,6 +18,7 @@ export function MateSpace() {
     loadMates, loadIncomingRequests,
     searchForMates, requestMate, acceptRequest, rejectRequest,
     setActiveMate, loadMateMessages, sendMessage, clearSearch,
+    hasSearched,
   } = useMateStore();
   const { user } = useAuthStore();
   const { currentMood } = useEmotionStore();
@@ -38,6 +39,16 @@ export function MateSpace() {
       loadIncomingRequests();
     }
   }, [user?.id]);
+
+  // 列表轮询：每 5 秒刷新搭子列表和申请列表（根据当前 tab）
+  useEffect(() => {
+    if (!user?.id) return;
+    const timer = setInterval(() => {
+      if (activeTab === 'mates') loadMates();
+      if (activeTab === 'requests') loadIncomingRequests();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [user?.id, activeTab, loadMates, loadIncomingRequests]);
 
   // 进入聊天时加载消息 + 启动轮询
   useEffect(() => {
@@ -486,8 +497,21 @@ export function MateSpace() {
             </div>
           )}
 
-          {/* 无结果 */}
-          {!isSearching && searchResults.length === 0 && (
+          {/* 无结果 — 已搜过 */}
+          {!isSearching && hasSearched && searchResults.length === 0 && (
+            <div style={{ textAlign: 'center', paddingTop: 40 }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>😕</div>
+              <div style={{ fontSize: 15, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                没有找到匹配的用户
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                按 F12 打开控制台查看 [MateSearch] DIAG 日志
+              </div>
+            </div>
+          )}
+
+          {/* 无结果 — 还没搜过 */}
+          {!isSearching && !hasSearched && searchResults.length === 0 && (
             <div style={{ textAlign: 'center', paddingTop: 40 }}>
               <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
               <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>

@@ -37,28 +37,14 @@ export const supabase = new Proxy({} as SupabaseClient, {
 
 // ============ 同步 profiles（登录后补写） ============
 export async function syncProfile(userId: string, username: string) {
-  console.log('[Supabase] syncProfile:', { id: userId, username });
+  console.log('[Supabase] syncProfile upsert:', { id: userId, username });
   try {
-    // 先检查是否已有记录
-    const { data: existing } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
-    console.log('[Supabase] 检查已有记录:', existing ? '存在' : '不存在');
-
-    if (existing) {
-      // UPDATE 已有记录
-      const { error } = await supabase
-        .from('profiles')
-        .update({ username, updated_at: new Date().toISOString() })
-        .eq('id', userId);
-      if (error) console.warn('[Supabase] profiles UPDATE 失败:', error.message, '(code:', (error as any).code, ')');
-      else console.log('[Supabase] profiles UPDATE 成功');
-    } else {
-      // INSERT 新记录
-      const { error } = await supabase
-        .from('profiles')
-        .insert({ id: userId, username, updated_at: new Date().toISOString() });
-      if (error) console.warn('[Supabase] profiles INSERT 失败:', error.message, '(code:', (error as any).code, ')');
-      else console.log('[Supabase] profiles INSERT 成功');
-    }
+    const { error } = await supabase.from('profiles').upsert(
+      { id: userId, username, updated_at: new Date().toISOString() },
+      { onConflict: 'id' }
+    );
+    if (error) console.warn('[Supabase] profiles upsert 失败:', error.message);
+    else console.log('[Supabase] profiles upsert 成功');
   } catch (err) {
     console.error('[Supabase] syncProfile 异常:', err);
   }
@@ -82,23 +68,29 @@ export async function signUp(email: string, password: string, username?: string)
   });
   if (error) throw error;
 
-  // 注册后写入 profiles：必须等有 session 才能通过 RLS 校验
+  console.log('[Supabase] signUp 返回:', {
+    hasUser: !!data.user,
+    hasSession: !!data.session,
+    userId: data.user?.id,
+    errorCode: (error as any)?.code,
+    errorMessage: (error as any)?.message,
+  });
+
+  // 注册后写入 profiles（RLS 已禁用，无论有无 session 都写入）
   if (data.user && username) {
-    if (!data.session) {
-      console.warn('[Supabase] 注册后无 session（邮件确认开启），profiles 写入推迟到首次登录');
-    } else {
-      console.log('[Supabase] 写入 profiles:', { id: data.user.id, username });
-      try {
-        const { error: profileError } = await supabase.from('profiles').upsert(
-          { id: data.user.id, username, updated_at: new Date().toISOString() },
-          { onConflict: 'id' }
-        );
-        if (profileError) console.warn('[Supabase] profiles 写入失败:', profileError.message);
-        else console.log('[Supabase] profiles 写入成功');
-      } catch (err) {
-        console.error('[Supabase] profiles upsert 异常:', err);
-      }
+    console.log('[Supabase] 准备写入 profiles:', { id: data.user.id, username });
+    try {
+      const { error: profileError, status } = await supabase.from('profiles').upsert(
+        { id: data.user.id, username, updated_at: new Date().toISOString() },
+        { onConflict: 'id' }
+      );
+      if (profileError) console.warn('[Supabase] profiles 写入失败:', profileError.message, 'status:', status);
+      else console.log('[Supabase] profiles 写入成功');
+    } catch (err) {
+      console.error('[Supabase] profiles upsert 异常:', err);
     }
+  } else {
+    console.log('[Supabase] 跳过 profiles 写入:', { hasUser: !!data.user, hasUsername: !!username });
   }
   return data;
 }
@@ -235,21 +227,48 @@ export interface MateProfile {
   updated_at?: string;
 }
 
+/** 情绪归一化：同义词映射到同一标签 */
+const EMOTION_NORMALIZE: Record<string, string> = {
+  '开心': '开心',
+  '快乐': '开心',
+  '喜悦': '开心',
+  '高兴': '开心',
+  '兴奋': '开心',
+  '难过': '难过',
+  '悲伤': '难过',
+  '低落': '难过',
+  '伤心': '难过',
+  '沮丧': '难过',
+  '平和': '平静',
+  '平静': '平静',
+  '放松': '平静',
+  '安心': '平静',
+  '宁静': '平静',
+  '焦虑': '焦虑',
+  '紧张': '焦虑',
+  '不安': '焦虑',
+  '担心': '焦虑',
+  '烦躁': '愤怒',
+  '愤怒': '愤怒',
+  '生气': '愤怒',
+  '疲惫': '疲惫',
+  '累了': '疲惫',
+  '困倦': '疲惫',
+};
+
+function normalizeEmotion(label?: string | null): string | null {
+  if (!label) return null;
+  return EMOTION_NORMALIZE[label] || label;
+}
+
 /** 情绪匹配映射：互补模式下的情绪对 */
 const COMPLEMENT_MAP: Record<string, string[]> = {
-  '开心': ['难过', '悲伤', '低落'],
-  '快乐': ['难过', '悲伤', '低落'],
-  '喜悦': ['难过', '悲伤', '低落'],
-  '难过': ['平静', '放松', '开心'],
-  '悲伤': ['平静', '放松', '开心'],
-  '低落': ['平静', '放松', '开心'],
-  '焦虑': ['平静', '放松'],
-  '紧张': ['平静', '放松'],
-  '不安': ['平静', '放松'],
+  '开心': ['难过', '平静'],
+  '难过': ['平静', '开心'],
+  '平静': ['焦虑', '难过'],
+  '焦虑': ['平静'],
   '愤怒': ['平静'],
-  '烦躁': ['平静'],
-  '平静': ['焦虑', '紧张', '不安'],
-  '放松': ['焦虑', '紧张', '不安'],
+  '疲惫': ['平静'],
 };
 
 /** 根据匹配模式搜索潜在搭子 */
@@ -258,30 +277,73 @@ export async function searchMates(
   mode: string,
   myEmotionLabel?: string | null
 ): Promise<MateProfile[]> {
-  let query = supabase
+  // ===== 诊断：先查所有 profiles =====
+  const { data: allProfiles, error: diagErr } = await supabase
+    .from('profiles')
+    .select('id, username, emotion_label');
+  console.log(`[MateSearch] DIAG 所有profiles: ${allProfiles?.length || 0}条, error=`, diagErr?.message || null);
+  if (allProfiles) {
+    allProfiles.forEach(p => console.log(`  - id=${p.id?.substring(0,8)}... name=${p.username} emotion=${p.emotion_label}`));
+  }
+
+  // 基础查询：排除自己
+  const baseQuery = () => supabase
     .from('profiles')
     .select('id, username, emotion_label, mood_tags, updated_at')
-    .neq('id', userId) // 排除自己
-    .not('username', 'is', null); // 必须有昵称
+    .neq('id', userId);
 
-  if (mode === 'resonance' && myEmotionLabel) {
-    // 共鸣：相同情绪标签
-    query = query.eq('emotion_label', myEmotionLabel);
-  } else if (mode === 'complement' && myEmotionLabel) {
-    // 互补：相反情绪
-    const targets = COMPLEMENT_MAP[myEmotionLabel] || [];
-    if (targets.length > 0) {
-      query = query.in('emotion_label', targets);
+  let data: any[] | null = null;
+  let error: any = null;
+
+  console.log(`[MateSearch] 搜索模式=${mode}, 我的情绪原始=${myEmotionLabel}, 归一化=${normalizeEmotion(myEmotionLabel)}, userId=${userId?.substring(0,8)}...`);
+
+  const normalizedEmotion = normalizeEmotion(myEmotionLabel);
+
+  if (mode === 'resonance' && normalizedEmotion) {
+    // 共鸣：优先归一化后相同情绪，无结果则回退到所有用户
+    const { data: d1, error: e1 } = await baseQuery()
+      .eq('emotion_label', normalizedEmotion)
+      .order('updated_at', { ascending: false })
+      .limit(20);
+    data = d1; error = e1;
+    console.log(`[MateSearch] 共鸣模式 精确匹配 emotion=${normalizedEmotion}: ${data?.length || 0} 条`);
+    if (!error && (!data || data.length === 0)) {
+      const { data: d2, error: e2 } = await baseQuery()
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      data = d2; error = e2;
+      console.log(`[MateSearch] 共鸣模式 回退全部: ${data?.length || 0} 条`);
     }
-    // 如果没有互补映射，则返回所有其他人
+  } else if (mode === 'complement' && normalizedEmotion) {
+    const targets = COMPLEMENT_MAP[normalizedEmotion] || [];
+    if (targets.length > 0) {
+      const { data: d1, error: e1 } = await baseQuery()
+        .in('emotion_label', targets)
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      data = d1; error = e1;
+      console.log(`[MateSearch] 互补模式 targets=${targets.join(',')}: ${data?.length || 0} 条`);
+    }
+    if (!data || data.length === 0) {
+      const { data: d2, error: e2 } = await baseQuery()
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      data = d2; error = e2;
+      console.log(`[MateSearch] 互补模式 回退全部: ${data?.length || 0} 条`);
+    }
+  } else {
+    const result = await baseQuery()
+      .order('updated_at', { ascending: false })
+      .limit(20);
+    data = result.data; error = result.error;
+    console.log(`[MateSearch] ${mode}模式 全部用户: ${data?.length || 0} 条`);
   }
-  // growth / silent 模式：匹配所有人（不再过滤情绪）
 
-  const { data, error } = await query
-    .order('updated_at', { ascending: false })
-    .limit(20);
-
-  if (error) throw new Error(`searchMates: ${error.message}`);
+  if (error) {
+    console.error(`[MateSearch] 错误:`, error);
+    throw new Error(`searchMates: ${error.message}`);
+  }
+  console.log(`[MateSearch] 最终返回: ${(data || []).length} 条`);
   return (data || []) as MateProfile[];
 }
 
@@ -291,15 +353,23 @@ export async function updateProfileEmotion(
   emotionLabel: string,
   moodTags?: string
 ): Promise<void> {
+  const normalized = normalizeEmotion(emotionLabel) || emotionLabel;
   const { error } = await supabase
     .from('profiles')
     .update({
-      emotion_label: emotionLabel,
+      emotion_label: normalized,
       mood_tags: moodTags || null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId);
   if (error) console.warn('[Supabase] updateProfileEmotion 失败:', error.message);
+}
+
+// ---- 工具 ----
+
+/** 计算两个用户之间的共享频道 ID（双向一致，幂等） */
+export function computeChannelId(userA: string, userB: string): string {
+  return [userA, userB].sort().join('_');
 }
 
 // ---- 好友请求 ----
@@ -322,6 +392,7 @@ export async function sendFriendRequest(
   toUserId: string,
   message?: string
 ): Promise<void> {
+  console.log('[Supabase] sendFriendRequest 发送中:', { fromUserId, toUserId, message });
   const { error } = await supabase
     .from('friend_requests')
     .upsert({
@@ -331,7 +402,11 @@ export async function sendFriendRequest(
       status: 'pending',
       updated_at: new Date().toISOString(),
     }, { onConflict: 'from_user_id,to_user_id' });
-  if (error) throw new Error(`sendFriendRequest: ${error.message}`);
+  if (error) {
+    console.error('[Supabase] sendFriendRequest 失败:', error);
+    throw new Error(`sendFriendRequest: ${error.message} (code: ${error.code})`);
+  }
+  console.log('[Supabase] sendFriendRequest 成功');
 }
 
 /** 获取发给我的好友申请（含发送者信息） */
@@ -371,7 +446,7 @@ export async function respondFriendRequest(
   accept: boolean,
   fromUserId: string,
   toUserId: string
-): Promise<void> {
+): Promise<{ channel_id: string } | void> {
   const status = accept ? 'accepted' : 'rejected';
 
   // 1. 更新申请状态
@@ -380,19 +455,23 @@ export async function respondFriendRequest(
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', requestId);
   if (error) throw new Error(`respondFriendRequest: ${error.message}`);
+  if (!accept) return;
 
-  // 2. 如果接受，建立双向好友关系
-  if (accept) {
-    const { error: e1 } = await supabase
-      .from('friends')
-      .upsert({ user_id: fromUserId, friend_id: toUserId }, { onConflict: 'user_id,friend_id' });
-    if (e1) console.warn('[Supabase] friends insert (1) 失败:', e1.message);
+  // 2. 建立双向好友关系（共享 channel_id）
+  const channelId = computeChannelId(fromUserId, toUserId);
+  console.log('[Supabase] respondFriendRequest 建立好友:', { fromUserId, toUserId, channelId });
 
-    const { error: e2 } = await supabase
-      .from('friends')
-      .upsert({ user_id: toUserId, friend_id: fromUserId }, { onConflict: 'user_id,friend_id' });
-    if (e2) console.warn('[Supabase] friends insert (2) 失败:', e2.message);
-  }
+  const { error: e1 } = await supabase
+    .from('friends')
+    .upsert({ user_id: fromUserId, friend_id: toUserId, channel_id: channelId }, { onConflict: 'user_id,friend_id' });
+  if (e1) throw new Error(`respondFriendRequest friends(1): ${e1.message}`);
+
+  const { error: e2 } = await supabase
+    .from('friends')
+    .upsert({ user_id: toUserId, friend_id: fromUserId, channel_id: channelId }, { onConflict: 'user_id,friend_id' });
+  if (e2) throw new Error(`respondFriendRequest friends(2): ${e2.message}`);
+
+  return { channel_id: channelId };
 }
 
 // ---- 好友列表 ----
@@ -401,6 +480,7 @@ export interface FriendRecord {
   id: number;
   user_id: string;
   friend_id: string;
+  channel_id: string;
   friend_username?: string;
   friend_emotion_label?: string;
   created_at: string;
@@ -410,7 +490,7 @@ export interface FriendRecord {
 export async function getFriends(userId: string): Promise<FriendRecord[]> {
   const { data, error } = await supabase
     .from('friends')
-    .select('id, user_id, friend_id, created_at')
+    .select('id, user_id, friend_id, channel_id, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -436,50 +516,54 @@ export async function getFriends(userId: string): Promise<FriendRecord[]> {
   }));
 }
 
-/** 获取与某个好友的 friendship_id */
-export async function getFriendshipId(userId: string, friendId: string): Promise<number | null> {
+/** 获取与某个好友的共享 channel_id */
+export async function getFriendshipId(userId: string, friendId: string): Promise<string | null> {
+  // 优先用计算值（无需网络请求，且兼容旧数据）
+  const computed = computeChannelId(userId, friendId);
+  // 验证该 channel 确实存在
   const { data, error } = await supabase
     .from('friends')
-    .select('id')
+    .select('channel_id')
     .eq('user_id', userId)
     .eq('friend_id', friendId)
     .maybeSingle();
   if (error || !data) return null;
-  return data.id;
+  return data.channel_id || computed;
 }
 
 // ---- 好友聊天 ----
 
 export interface FriendMessageRecord {
   id: number;
-  friendship_id: number;
+  friendship_id: number;      // 旧字段保留兼容
+  channel_id: string;         // 共享频道 ID
   sender_id: string;
   content: string;
   created_at: string;
 }
 
-/** 发送好友消息 */
+/** 发送好友消息（通过 channel_id） */
 export async function sendFriendMessage(
-  friendshipId: number,
+  channelId: string,
   senderId: string,
   content: string
 ): Promise<void> {
   const { error } = await supabase
     .from('friend_messages')
     .insert({
-      friendship_id: friendshipId,
+      channel_id: channelId,
       sender_id: senderId,
       content,
     });
   if (error) throw new Error(`sendFriendMessage: ${error.message}`);
 }
 
-/** 获取好友聊天记录 */
-export async function getFriendMessages(friendshipId: number): Promise<FriendMessageRecord[]> {
+/** 获取好友聊天记录（通过 channel_id） */
+export async function getFriendMessages(channelId: string): Promise<FriendMessageRecord[]> {
   const { data, error } = await supabase
     .from('friend_messages')
     .select('*')
-    .eq('friendship_id', friendshipId)
+    .eq('channel_id', channelId)
     .order('created_at', { ascending: true })
     .limit(200);
 

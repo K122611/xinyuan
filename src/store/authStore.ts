@@ -57,7 +57,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               isLoading: false,
             });
             // 恢复 session 后补写 profiles
-            if (name) syncProfile(user.id, name);
+            syncProfile(user.id, name || user.email?.split('@')[0] || 'unknown');
           } else {
             console.log('[Auth] 缓存 session 已失效，清除本地数据');
             await supabase.auth.signOut({ scope: 'local' });
@@ -103,9 +103,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const data = await signIn(email, password);
       const name = data.user?.user_metadata?.username || '';
 
-      // 登录后补写 profiles（兼容邮件确认情况下注册时未写入）
-      if (data.user?.id && name) {
-        syncProfile(data.user.id, name);
+      // 登录后补写 profiles
+      if (data.user?.id) {
+        syncProfile(data.user.id, name || data.user.email?.split('@')[0] || 'unknown');
       }
 
       set({
@@ -125,13 +125,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (email, password, username) => {
     set({ authError: null, isLoading: true });
     try {
+      // 先登出旧账号，确保 signUp 用新用户身份写 profile
+      await supabase.auth.signOut();
       const data = await signUp(email, password, username);
 
+      // 无论有无 session，都强制写入 profile
+      if (data.user?.id && username) {
+        syncProfile(data.user.id, username);
+      }
+
       if (data.session) {
-        // 邮箱确认已关闭 → 直接登录，补写 profiles
-        if (data.user?.id && username) {
-          syncProfile(data.user.id, username);
-        }
         set({
           user: data.user,
           username: username || '',
