@@ -1,9 +1,9 @@
 {
   "name": "xinyuan-emo-mate",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "心元 EMO-Mate - 有温度的AI情感陪伴助手",
   "type": "module",
-  "main": "electron/main.cjs",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -16,7 +16,7 @@
   "build": {
     "appId": "com.xinyuan.emomate",
     "productName": "心元 EMO-Mate",
-    "npmRebuild": false,
+    "npmRebuild": true,
     "directories": {
       "output": "release",
       "buildResources": "public"
@@ -30,9 +30,7 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ]
     },
@@ -56,6 +54,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
+    "serialport": "^12.0.0",
     "uuid": "^9.0.0",
     "zustand": "^4.4.0"
   },

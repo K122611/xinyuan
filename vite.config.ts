@@ -9,6 +9,12 @@ export default defineConfig({
   build: {
     outDir: 'dist/renderer',
     emptyOutDir: true,
+    rollupOptions: {
+      external: ['serialport', '@serialport/parser-readline'],
+    },
+  },
+  optimizeDeps: {
+    exclude: ['serialport'],
   },
   resolve: {
     alias: {

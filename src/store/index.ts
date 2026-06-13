@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { PetAction } from '@/utils/petActionParser';
 import { syncMessage, syncConversation, fetchConversations, fetchMessages } from '@/services/supabase';
+import { setEmotion } from '@/services/servo';
 
 // ============ 简易本地存储适配器（按用户隔离） ============
 let _getAuthUserId: (() => string) | null = null;
@@ -568,6 +569,8 @@ export const usePetStore = create<PetState>((set, get) => ({
     const pet = { ...get().pet, mood };
     storage.set('pet', pet);
     set({ pet });
+    // 驱动舵机（异步，不阻塞）
+    setEmotion(mood).catch((e) => console.warn('[PetStore] 舵机驱动失败:', e));
   },
 
   // ---- 方案A：AI回复实时气泡 ----

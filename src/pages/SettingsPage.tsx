@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore, usePersonaStore, usePetStore, useCozeConfigStore } from '@/store';
+import ServoPanel from '@/components/ServoPanel';
 
 export function SettingsPage() {
   const userNickname = useAppStore((s) => s.userNickname);
@@ -167,6 +168,11 @@ export function SettingsPage() {
             )}
           </div>
         )}
+      </div>
+
+      {/* 心元特色 · 实体桌宠连接 */}
+      <div style={{ marginBottom: 16 }}>
+        <ServoPanel />
       </div>
 
       {/* AI人格参数 */}
