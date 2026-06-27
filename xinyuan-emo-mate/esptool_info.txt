@@ -1,0 +1,10 @@
+Name: esptool
+Version: 5.3.0
+Summary: A serial utility for flashing, provisioning, and interacting with Espressif SoCs.
+Home-page: https://github.com/espressif/esptool/
+Author: Fredrik Ahlberg (themadinventor), Angus Gratton (projectgus), Espressif Systems
+Author-email: 
+License: GPLv2+
+Location: C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages
+Requires: bitstring, click, cryptography, intelhex, pyserial, PyYAML, reedsolo, rich_click
+Required-by: 

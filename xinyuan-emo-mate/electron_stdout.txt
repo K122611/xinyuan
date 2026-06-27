@@ -1,0 +1,8 @@
+
+[Opus自检] 生成 440Hz 测试音...
+[Opus自检] Frame 1: 88B → decode energy(前10)=0
+[Opus自检] Frame 2: 96B → decode energy(前10)=4309
+[Opus自检] Frame 3: 96B → decode energy(前10)=2168
+[Opus自检] Frame 4: 98B → decode energy(前10)=1277
+[Opus自检] Frame 5: 98B → decode energy(前10)=3252
+[Opus自检] ✅ 编码-解码环路正常

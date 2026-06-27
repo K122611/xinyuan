@@ -1,0 +1,5 @@
+key,type,encoding,value
+wifi,namespace,,
+ssid,data,string,LAPTOP-4JO41ML4 2483
+password,data,string,T3631a$2
+ota_url,data,string,http://192.168.137.1:8888/xiaozhi/ota/

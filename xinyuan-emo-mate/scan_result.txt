@@ -1,0 +1,5 @@
+Microsoft PnP Utility
+
+Failed to scan for devices.
+Access is denied.
+

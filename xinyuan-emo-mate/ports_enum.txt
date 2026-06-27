@@ -1,0 +1,18 @@
+Microsoft PnP Utility
+
+Instance ID:                USB\VID_10C4&PID_EA60\0001
+Device Description:         Silicon Labs CP210x USB to UART Bridge (COM3)
+Class Name:                 Ports
+Class GUID:                 {4d36e978-e325-11ce-bfc1-08002be10318}
+Manufacturer Name:          Silicon Labs
+Status:                     Disconnected
+Driver Name:                oem104.inf
+
+Instance ID:                USB\VID_2341&PID_0043\03536373332351503143
+Device Description:         Arduino Uno (COM4)
+Class Name:                 Ports
+Class GUID:                 {4d36e978-e325-11ce-bfc1-08002be10318}
+Manufacturer Name:          Arduino LLC (www.arduino.cc)
+Status:                     Disconnected
+Driver Name:                oem99.inf
+

@@ -1,0 +1,211 @@
+uid=87_0 RootWebArea "ci: 触发重新构建 (permissions 已修复) · K122611/xinyuan@4fd8610" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911"
+  uid=87_1 link "Skip to content" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#start-of-content"
+    uid=87_2 StaticText "Skip to content"
+  uid=87_3 banner "Global Navigation Menu"
+    uid=87_4 button "Open menu" haspopup="dialog"
+    uid=87_5 link "Homepage ( g then d )" url="https://github.com/"
+    uid=87_6 navigation "Breadcrumbs"
+      uid=87_7 link "K122611" url="https://github.com/K122611"
+        uid=87_8 StaticText "K122611"
+      uid=87_9 link "xinyuan" url="https://github.com/K122611/xinyuan"
+        uid=87_10 StaticText "xinyuan"
+    uid=87_11 button "Search or jump to…"
+    uid=87_12 link "Chat with Copilot" url="https://github.com/copilot"
+    uid=87_13 button "Open Copilot…" expandable haspopup="menu"
+    uid=87_14 button "Create new..." expandable haspopup="menu"
+    uid=87_15 link "All issues" url="https://github.com/issues"
+    uid=87_16 link "All pull requests" url="https://github.com/pulls"
+    uid=87_17 link "All repositories" url="https://github.com/repos"
+    uid=87_18 link "You have unread notifications ( g then n )" url="https://github.com/notifications"
+    uid=87_19 button "Open user navigation menu" haspopup="menu"
+    uid=87_20 heading "Repository navigation" level="2"
+    uid=87_21 navigation "Repository"
+      uid=87_22 link "Code" url="https://github.com/K122611/xinyuan"
+        uid=87_23 StaticText "Code"
+      uid=87_24 link "Issues" url="https://github.com/K122611/xinyuan/issues"
+        uid=87_25 StaticText "Issues"
+      uid=87_26 link "Pull requests" url="https://github.com/K122611/xinyuan/pulls"
+        uid=87_27 StaticText "Pull requests"
+      uid=87_28 link "Agents" url="https://github.com/K122611/xinyuan/agents?author=K122611"
+        uid=87_29 StaticText "Agents"
+      uid=87_30 link "Actions" url="https://github.com/K122611/xinyuan/actions"
+        uid=87_31 StaticText "Actions"
+      uid=87_32 link "Projects" url="https://github.com/K122611/xinyuan/projects"
+        uid=87_33 StaticText "Projects"
+      uid=87_34 link "Wiki" url="https://github.com/K122611/xinyuan/wiki"
+        uid=87_35 StaticText "Wiki"
+      uid=87_36 link "Security and quality" url="https://github.com/K122611/xinyuan/security"
+        uid=87_37 StaticText "Security and quality"
+      uid=87_38 link "Insights" url="https://github.com/K122611/xinyuan/pulse"
+        uid=87_39 StaticText "Insights"
+      uid=87_40 link "Settings" url="https://github.com/K122611/xinyuan/settings"
+        uid=87_41 StaticText "Settings"
+  uid=87_42 main
+    uid=87_43 link "Build & Release" url="https://github.com/K122611/xinyuan/actions/workflows/release.yml"
+      uid=87_44 StaticText "Build & Release"
+    uid=87_45 image "completed successfully: "
+    uid=87_46 heading "ci: 触发重新构建 (permissions 已修复) #4" level="1"
+    uid=87_47 button "Re-run all jobs"
+    uid=87_48 button "Workflow run options" expandable haspopup="menu"
+    uid=87_49 navigation "Workflow run"
+      uid=87_50 link "Summary" url="https://github.com/K122611/xinyuan/actions/runs/27273039959"
+        uid=87_51 StaticText "Summary"
+      uid=87_52 heading "All jobs" level="4"
+      uid=87_53 button "Filter by job status" expandable haspopup="menu"
+      uid=87_54 link "build-and-release" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911"
+        uid=87_55 StaticText "build-and-release"
+      uid=87_56 heading "Run details" level="3"
+      uid=87_57 link "Usage" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/usage"
+        uid=87_58 StaticText "Usage"
+      uid=87_59 link "Workflow file" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/workflow"
+        uid=87_60 StaticText "Workflow file"
+    uid=87_61 region "Check run summary"
+      uid=87_62 region "Annotations"
+        uid=87_63 button "Open job annotations"
+        uid=87_64 heading "Annotations" level="2"
+        uid=87_65 StaticText "1 warning and 1 notice"
+      uid=87_66 link "build-and-release" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#logs"
+        uid=87_67 StaticText "build-and-release"
+      uid=87_68 StaticText "succeeded "
+      uid=87_69 StaticText "1 minute ago"
+      uid=87_70 StaticText " in 4m 9s"
+      uid=87_71 form
+        uid=87_72 textbox "Search"
+      uid=87_73 button "Re-run this job"
+      uid=87_74 button "Show options" expandable haspopup="menu"
+      uid=87_75 DisclosureTriangle "Set up job 1s" expandable
+      uid=87_76 DisclosureTriangle "Checkout 7s" expandable
+      uid=87_77 DisclosureTriangle "Setup Node.js 10s" expandable
+      uid=87_78 DisclosureTriangle "Cache node_modules 6s" expandable
+      uid=87_79 DisclosureTriangle "Install dependencies 34s" expandable
+      uid=87_80 DisclosureTriangle "Build Vite 3s" expandable
+      uid=87_81 DisclosureTriangle "Build Electron 3m 5s" expandable expanded focusable focused
+      uid=88_0 link "1" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:1"
+        uid=88_1 StaticText "1"
+      uid=88_2 DisclosureTriangle "Run npx electron-builder build --win --x64 " expandable
+      uid=88_3 link "6" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:7"
+        uid=88_4 StaticText "6"
+      uid=88_5 StaticText "  • electron-builder  version=26.15.2 os=10.0.26100
+"
+      uid=88_6 link "7" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:8"
+        uid=88_7 StaticText "7"
+      uid=88_8 StaticText "  • Implicit publishing triggered by git tag. This behavior will be disabled in electron-builder v27. Please use --publish explicitly.  tag=v1.0.3
+"
+      uid=88_9 link "8" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:9"
+        uid=88_10 StaticText "8"
+      uid=88_11 StaticText "  • loaded configuration  file=package.json ("build" field)
+"
+      uid=88_12 link "9" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:10"
+        uid=88_13 StaticText "9"
+      uid=88_14 StaticText "  • author is missed in the package.json  appPackageFile=D:\a\xinyuan\xinyuan\package.json
+"
+      uid=88_15 link "10" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:11"
+        uid=88_16 StaticText "10"
+      uid=88_17 StaticText "  • executing @electron/rebuild  electronVersion=42.4.0 arch=x64 buildFromSource=false workspaceRoot=D:\a\xinyuan\xinyuan projectDir=./ appDir=./
+"
+      uid=88_18 link "11" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:12"
+        uid=88_19 StaticText "11"
+      uid=88_20 StaticText "  • installing native dependencies  arch=x64
+"
+      uid=88_21 link "12" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:13"
+        uid=88_22 StaticText "12"
+      uid=88_23 StaticText "  • completed installing native dependencies
+"
+      uid=88_24 link "13" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:14"
+        uid=88_25 StaticText "13"
+      uid=88_26 StaticText "  • packaging       platform=win32 arch=x64 electron=42.4.0 appOutDir=release\win-unpacked
+"
+      uid=88_27 link "14" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:15"
+        uid=88_28 StaticText "14"
+      uid=88_29 StaticText "  • downloaded      label=electron progress=100%
+"
+      uid=88_30 link "15" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:16"
+        uid=88_31 StaticText "15"
+      uid=88_32 StaticText "  • downloaded electron zip extracted successfully  output=D:\a\xinyuan\xinyuan\release\win-unpacked
+"
+      uid=88_33 link "16" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:17"
+        uid=88_34 StaticText "16"
+      uid=88_35 StaticText "  • searching for node modules  pm=npm searchDir=D:\a\xinyuan\xinyuan
+"
+      uid=88_36 link "17" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:18"
+        uid=88_37 StaticText "17"
+      uid=88_38 StaticText "  • duplicate dependency references  dependencies=["react-dom@18.3.1","react@18.3.1","react@18.3.1","loose-envify@1.4.0","react-dom@18.3.1","react@18.3.1","react@18.3.1","loose-envify@1.4.0","react@18.3.1","react@18.3.1"]
+"
+      uid=88_39 link "18" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:19"
+        uid=88_40 StaticText "18"
+      uid=88_41 StaticText "  • updating asar integrity executable resource  executablePath=release\win-unpacked\心元 EMO-Mate.exe
+"
+      uid=88_42 link "19" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:20"
+        uid=88_43 StaticText "19"
+      uid=88_44 StaticText "  • default Electron icon is used  reason=application icon is not set
+"
+      uid=88_45 link "20" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:21"
+        uid=88_46 StaticText "20"
+      uid=88_47 StaticText "  • signing with signtool.exe  path=release\win-unpacked\心元 EMO-Mate.exe
+"
+      uid=88_48 link "21" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:22"
+        uid=88_49 StaticText "21"
+      uid=88_50 StaticText "  • building        target=nsis file=release\心元 EMO-Mate Setup 1.0.3.exe archs=x64 oneClick=false perMachine=false
+"
+      uid=88_51 link "22" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:23"
+        uid=88_52 StaticText "22"
+      uid=88_53 StaticText "  • downloaded      label=nsis-3.0.4.1.7z progress=100%
+"
+      uid=88_54 link "23" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:24"
+        uid=88_55 StaticText "23"
+      uid=88_56 StaticText "  • downloaded      label=7zip-win-x64.tar.gz progress=100%
+"
+      uid=88_57 link "24" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:25"
+        uid=88_58 StaticText "24"
+      uid=88_59 StaticText "  • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
+"
+      uid=88_60 link "25" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:26"
+        uid=88_61 StaticText "25"
+      uid=88_62 StaticText "  • downloaded      label=nsis-resources-3.4.1.7z progress=100%
+"
+      uid=88_63 link "26" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:27"
+        uid=88_64 StaticText "26"
+      uid=88_65 StaticText "  • signing with signtool.exe  path=release\心元 EMO-Mate Setup 1.0.3.__uninstaller.exe
+"
+      uid=88_66 link "27" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:28"
+        uid=88_67 StaticText "27"
+      uid=88_68 StaticText "  • signing with signtool.exe  path=release\心元 EMO-Mate Setup 1.0.3.exe
+"
+      uid=88_69 link "28" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:29"
+        uid=88_70 StaticText "28"
+      uid=88_71 StaticText "  • building block map  blockMapFile=release\心元 EMO-Mate Setup 1.0.3.exe.blockmap
+"
+      uid=88_72 link "29" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:30"
+        uid=88_73 StaticText "29"
+      uid=88_74 StaticText "  • publishing      publisher=Github (owner: K122611, project: xinyuan, version: 1.0.3)
+"
+      uid=88_75 link "30" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:31"
+        uid=88_76 StaticText "30"
+      uid=88_77 StaticText "  • publishing      publisher=Github (owner: K122611, project: xinyuan, version: 1.0.3)
+"
+      uid=88_78 link "31" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:32"
+        uid=88_79 StaticText "31"
+      uid=88_80 StaticText "  • uploading       file=xinyuan-emo-mate-setup-1.0.3.exe.blockmap provider=github
+"
+      uid=88_81 link "32" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:33"
+        uid=88_82 StaticText "32"
+      uid=88_83 StaticText "  • uploading       file=xinyuan-emo-mate-setup-1.0.3.exe provider=github
+"
+      uid=88_84 link "33" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:34"
+        uid=88_85 StaticText "33"
+      uid=88_86 StaticText "  • overwrite published file  file=xinyuan-emo-mate-setup-1.0.3.exe.blockmap reason=already exists on GitHub
+"
+      uid=88_87 link "34" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:35"
+        uid=88_88 StaticText "34"
+      uid=88_89 StaticText "  • overwrite published file  file=xinyuan-emo-mate-setup-1.0.3.exe reason=already exists on GitHub
+"
+      uid=88_90 link "35" url="https://github.com/K122611/xinyuan/actions/runs/27273039959/job/80547108911#step:7:36"
+        uid=88_91 StaticText "35"
+      uid=88_92 StaticText "  • overwrite published file  file=latest.yml reason=already exists on GitHub
+"
+      uid=87_82 DisclosureTriangle "Post Cache node_modules 0s" expandable
+      uid=87_83 DisclosureTriangle "Post Setup Node.js 0s" expandable
+      uid=87_84 DisclosureTriangle "Post Checkout 2s" expandable
+      uid=87_85 DisclosureTriangle "Complete job 0s" expandable
+  uid=87_86 generic atomic live="polite" relevant="additions text"
+  uid=87_87 generic atomic live="assertive" relevant="additions text"

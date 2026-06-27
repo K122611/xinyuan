@@ -1,0 +1,17 @@
+uid=73_0 RootWebArea "fix: 移除重复的 Upload to Release 步骤 · K122611/xinyuan@c77a32a" url="https://github.com/K122611/xinyuan/actions/runs/27272131577"
+  uid=74_0 dialog "Re-run all jobs" modal
+    uid=74_1 heading "Re-run all jobs" level="1"
+    uid=74_2 StaticText "Re-run all jobs"
+    uid=74_3 StaticText "A new attempt of this workflow will be started, including "
+    uid=74_4 StaticText "all the jobs"
+    uid=74_5 StaticText ":"
+    uid=74_6 button "Close" focusable focused
+    uid=74_7 image "completed successfully: "
+    uid=74_8 StaticText "build-and-release"
+    uid=74_9 form
+      uid=74_10 checkbox "Enable debug logging"
+      uid=74_11 StaticText "Enable "
+      uid=74_12 link "debug logging" url="https://docs.github.com/actions/monitoring-and-troubleshooting-workflows/enabling-debug-logging"
+        uid=74_13 StaticText "debug logging"
+    uid=74_14 button "Cancel"
+    uid=74_15 button "Re-run jobs"

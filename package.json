@@ -1,0 +1,62 @@
+{
+  "name": "xinyuan-emo-mate",
+  "version": "1.0.9",
+  "description": "心元 — AI情绪搭子空间",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron .\"",
+    "electron:build": "npm run build && electron-builder",
+    "electron:preview": "npm run build && cross-env NODE_ENV=production electron ."
+  },
+  "dependencies": {
+    "@electron/get": "^5.0.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "extract-zip": "^2.0.1",
+    "opusscript": "^0.1.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "selfsigned": "^5.5.0",
+    "serialport": "^12.0.0",
+    "ws": "^8.21.0",
+    "zustand": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.1.0",
+    "arduino-cli": "^0.37.0",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.2.0",
+    "vite": "^5.0.0",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.xinyuan.emo-mate",
+    "productName": "心元",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/favicon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

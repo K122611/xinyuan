@@ -1,0 +1,4 @@
+key,type,encoding,value
+wifi,namespace,,
+ota_url,data,string,ws://192.168.137.1:8888
+websocket_url,data,string,ws://192.168.137.1:8888

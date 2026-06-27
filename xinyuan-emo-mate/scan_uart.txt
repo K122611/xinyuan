@@ -1,0 +1,19 @@
+Device Description:         HID-compliant mouse
+Device Description:         HID-compliant mouse
+Instance ID:                ROOT\CompositeBus\0000
+Driver Name:                compositebus.inf
+Class Name:                 SoftwareComponent
+Class Name:                 Computer
+Device Description:         Lenovo ACPI-Compliant Virtual Power Controller
+Device Description:         USB Composite Device
+Device Description:         Microsoft ACPI-Compliant System
+Instance ID:                SWD\COMPUTER\MFG_LENOVO&FAM_Legion_R9000P_ADR10&PROD_83LV&SKU_LENOVO_MT_83LV_BU_idea_FM_Legion_R9
+Class Name:                 Computer
+Driver Name:                compdev.inf
+Device Description:         Elevoc Audio Effects Component
+Device Description:         Realtek Audio Effects Component
+Device Description:         Elevoc Audio Effects Component
+Instance ID:                SWD\DRIVERENUM\UdcComponent&1&1a590e2c&0
+Class Name:                 SoftwareComponent
+Device Description:         Nahimic Nh4 Audio Effects Component
+Device Description:         HID-compliant device

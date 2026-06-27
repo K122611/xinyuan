@@ -1,0 +1,89 @@
+# ============================================
+# 构建产物 / 依赖
+# ============================================
+node_modules/
+dist/
+release*/
+build/
+out/
+target/
+
+# ============================================
+# ESP32 工具链（非源代码）
+# ============================================
+**/riscv32-esp-elf/
+**/esp-idf*/
+**/esp-idf**
+**/managed_components/
+**/arduino-data/
+**/arduino-cli*/
+**/arduino-cli-tool/
+xiaozhi-firmware/xiaozhi-esp32/
+xiaozhi-firmware/xiaozhi-esp32-*/
+xiaozhi-firmware/*.zip
+xiaozhi-firmware/*.bin
+xiaozhi-firmware/*.elf
+xiaozhi-firmware/*.map
+xiaozhi-firmware/src/
+xiaozhi-firmware/*-amoled/
+xiaozhi-firmware/128x64/
+xiaozhi-firmware/项目散落文件/
+xinyuan-emo-mate/release2/
+
+# ============================================
+# 固件二进制
+# ============================================
+*.bin
+*.elf
+*.hex
+*.uf2
+*.exe
+*.msi
+*.dmg
+*.AppImage
+
+# 但保留必要的 NVS 配置
+!xiaozhi-firmware/nvs*.csv
+!xiaozhi-firmware/merged-binary.bin
+
+# ============================================
+# 日志 / 调试产物
+# ============================================
+*.log
+debug/
+test-output.*
+bridge*.log
+
+# ============================================
+# 临时文件
+# ============================================
+/temp/
+/tmp/
+/临时文件/
+/asar_extract/
+/asar_new/
+/arduino_sg90/
+/audio_cache/
+/firmware_v2.2.6_1.8/
+.aionrs/
+/xiaozhi-firmware/__pycache__/
+
+# ============================================
+# IDE / 系统
+# ============================================
+.env
+.env.local
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.pyc
+__pycache__/
+
+# ============================================
+# 证书（如需发布请移除此段）
+# ============================================
+certs/*.pem

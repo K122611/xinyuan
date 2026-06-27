@@ -1,0 +1,74 @@
+Microsoft PnP Utility
+
+Instance ID:                USB\ROOT_HUB30\5&d4a2187&0&0
+Device Description:         USB 根集线器(USB 3.0)
+Class Name:                 USB
+Class GUID:                 {36fc9e60-c465-11cf-8056-444553540000}
+Manufacturer Name:          (标准 USB 集线器)
+Status:                     Started
+Driver Name:                usbhub3.inf
+
+Instance ID:                PCI\VEN_1022&DEV_15B8&SUBSYS_382917AA&REV_00\4&1cec15e5&0&0043
+Device Description:         AMD USB 2.0 可扩展主机控制器 - 1.20 (Microsoft)
+Class Name:                 USB
+Class GUID:                 {36fc9e60-c465-11cf-8056-444553540000}
+Manufacturer Name:          通用 USB xHCI 主机控制器
+Status:                     Started
+Driver Name:                usbxhci.inf
+
+Instance ID:                USB\VID_05E3&PID_0610\6&1cb538dd&0&2
+Device Description:         通用 USB 集线器
+Class Name:                 USB
+Class GUID:                 {36fc9e60-c465-11cf-8056-444553540000}
+Manufacturer Name:          (标准 USB 集线器)
+Status:                     Started
+Driver Name:                usbhub3.inf
+
+Instance ID:                USB\VID_174F&PID_246F\0001
+Device Description:         USB Composite Device
+Class Name:                 USB
+Class GUID:                 {36fc9e60-c465-11cf-8056-444553540000}
+Manufacturer Name:          (标准 USB 主控制器)
+Status:                     Started
+Driver Name:                usb.inf
+
+Instance ID:                USB\ROOT_HUB30\5&21d782f4&0&0
+Device Description:         USB 根集线器(USB 3.0)
+Class Name:                 USB
+Class GUID:                 {36fc9e60-c465-11cf-8056-444553540000}
+Manufacturer Name:          (标准 USB 集线器)
+Status:                     Started
+Driver Name:                usbhub3.inf
+
+Instance ID:                USB\ROOT_HUB30\5&17a63683&0&0
+Device Description:         USB 根集线器(USB 3.0)
+Class Name:                 USB
+Class GUID:                 {36fc9e60-c465-11cf-8056-444553540000}
+Manufacturer Name:          (标准 USB 集线器)
+Status:                     Started
+Driver Name:                usbhub3.inf
+
+Instance ID:                PCI\VEN_1022&DEV_15B6&SUBSYS_382717AA&REV_00\4&6c4ad28&0&0341
+Device Description:         AMD USB 3.10 可扩展主机控制器 - 1.20 (Microsoft)
+Class Name:                 USB
+Class GUID:                 {36fc9e60-c465-11cf-8056-444553540000}
+Manufacturer Name:          通用 USB xHCI 主机控制器
+Status:                     Started
+Driver Name:                usbxhci.inf
+
+Instance ID:                USB\VID_05E3&PID_0620\6&1cb538dd&0&4
+Device Description:         通用 SuperSpeed USB 集线器
+Class Name:                 USB
+Class GUID:                 {36fc9e60-c465-11cf-8056-444553540000}
+Manufacturer Name:          (标准 USB 集线器)
+Status:                     Started
+Driver Name:                usbhub3.inf
+
+Instance ID:                PCI\VEN_1022&DEV_15B7&SUBSYS_382A17AA&REV_00\4&6c4ad28&0&0441
+Device Description:         AMD USB 3.10 可扩展主机控制器 - 1.20 (Microsoft)
+Class Name:                 USB
+Class GUID:                 {36fc9e60-c465-11cf-8056-444553540000}
+Manufacturer Name:          通用 USB xHCI 主机控制器
+Status:                     Started
+Driver Name:                usbxhci.inf
+

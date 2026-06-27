@@ -1,0 +1,11 @@
+[小智桥接] ❌ 服务器错误: listen EADDRINUSE: address already in use :::8888
+[97864:0627/162200.420:ERROR:net\disk_cache\cache_util_win.cc:25] Unable to move the cache: 拒绝访问。 (0x5)
+[97864:0627/162200.421:ERROR:net\disk_cache\cache_util_win.cc:25] Unable to move the cache: 拒绝访问。 (0x5)
+[97864:0627/162200.421:ERROR:net\disk_cache\cache_util_win.cc:25] Unable to move the cache: 拒绝访问。 (0x5)
+[97864:0627/162200.434:ERROR:content\browser\network_service_instance_impl.cc:703] Network service crashed or was terminated, restarting service.
+[97864:0627/162200.436:ERROR:net\disk_cache\disk_cache.cc:284] Unable to create cache
+[97864:0627/162200.437:ERROR:gpu\ipc\host\gpu_disk_cache.cc:737] Gpu Cache Creation failed: -2
+[97864:0627/162200.437:ERROR:net\disk_cache\disk_cache.cc:284] Unable to create cache
+[97864:0627/162200.437:ERROR:gpu\ipc\host\gpu_disk_cache.cc:737] Gpu Cache Creation failed: -2
+[97864:0627/162200.438:ERROR:net\disk_cache\disk_cache.cc:284] Unable to create cache
+[97864:0627/162200.438:ERROR:gpu\ipc\host\gpu_disk_cache.cc:737] Gpu Cache Creation failed: -2

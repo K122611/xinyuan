@@ -1,0 +1,450 @@
+import React, { useRef, useEffect, useState } from 'react';
+import { useAppStore, useChatStore, useEmotionStore, usePetStore, useMilestoneStore } from '@/store';
+import { chatWithCoze, chatWithCozeStream, cleanContent } from '@/services/cozeApi';
+import { petIPC } from '@/services/petIPC';
+import { parsePetAction } from '@/utils/petActionParser';
+import { useVoiceChat } from '@/services/useVoiceChat';
+
+export function ChatPage() {
+  const currentSessionId = useAppStore((s) => s.currentSessionId);
+  const initSession = useAppStore((s) => s.initSession);
+  const { messages, isLoading, loadHistory, addMessage, updateMessage, setLoading, loadSessions, sessions } = useChatStore();
+  const [input, setInput] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const currentMood = useEmotionStore((s) => s.currentMood);
+  const { state: voiceState, supported: voiceSupported, lastUserSpeech, lastAiResponse, toggleVoice } = useVoiceChat();
+
+  useEffect(() => {
+    loadSessions();
+    const savedSessionId = localStorage.getItem('xinyuan_currentSessionId');
+    const sid = savedSessionId ? JSON.parse(savedSessionId) : initSession();
+    if (savedSessionId) useAppStore.getState().setCurrentSession(sid);
+    loadHistory(sid);
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // 简易本地情绪分析
+  const analyzeLocalEmotion = (text: string): { score: number; label: string } => {
+    const lower = text;
+    const intenseWords = ['崩溃', '绝望', '不想活', '自残', '自杀', '受不了'];
+    const negativeWords = ['焦虑', '难过', '压力', '失眠', '害怕', '烦', '累', '痛', '抑郁', '孤单', '孤独', '迷茫', '伤心', '生气', '愤怒'];
+
+    let score = 6;
+    const hasIntense = intenseWords.some(w => lower.includes(w));
+    const hasNegative = negativeWords.filter(w => lower.includes(w)).length;
+
+    if (hasIntense) score = 2;
+    else if (hasNegative >= 3) score = 3;
+    else if (hasNegative >= 1) score = 4;
+
+    let label = '平静';
+    if (score <= 2) label = '极度低落';
+    else if (score <= 3) label = '低落';
+    else if (score <= 4) label = '轻微低落';
+    else if (score <= 5) label = '略感不适';
+    else label = '平和';
+
+    return { score, label };
+  };
+
+  // 本地共情回复引擎
+  const generateResponse = (text: string, emotion: { score: number; label: string }): string => {
+    const templates: Record<string, string[]> = {
+      '极度低落': [
+        '我在这里。你愿意告诉我更多关于你现在感受到的吗？不用急，慢慢说。',
+        '听起来你现在非常沉重。深呼吸，我在听，你可以把所有想说的都说出来。\n\n🌬️ 我们先一起深呼吸：\n吸气 1、2、3……\n呼气 1、2、3……\n再来一次，感受空气慢慢充满，再缓缓释放。',
+      ],
+      '低落': [
+        '我能感受到你现在的心情不太好。最近是遇到什么事了吗？愿意跟我说说吗？',
+        '听起来你最近有些压抑。有时候说出来本身，就是一种释放。',
+      ],
+      '轻微低落': [
+        '好像有些事让你不太舒服？我在这里，你可以慢慢说。',
+        '我注意到你似乎有些心事。没关系，我们可以一起理一理。',
+      ],
+      '略感不适': [
+        '听起来今天可能有些不太顺心？跟我聊聊吧。',
+        '有些烦躁是吗？说出来会好一些的。',
+      ],
+      '平和': [
+        '我在这里哦，有什么想聊的都可以跟我说~ 😊',
+        '今天怎么样？遇到什么有趣的事了吗？',
+        '嗯，我在听。你可以慢慢说~',
+      ],
+    };
+
+    const pool = templates[emotion.label] || templates['平和'];
+    return pool[Math.floor(Math.random() * pool.length)];
+  };
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text || isLoading) return;
+
+    setInput('');
+    const sessionId = currentSessionId || initSession();
+    const userMsg = { id: Date.now().toString(), session_id: sessionId, role: 'user' as const, content: text };
+    addMessage(userMsg);
+    setLoading(true);
+
+    // 情绪分析
+    const emotion = analyzeLocalEmotion(text);
+
+    // 更新萌宠状态
+    const petMoodMap: Record<string, string> = {
+      '极度低落': 'sad', '低落': 'sad', '轻微低落': 'anxious',
+      '略感不适': 'anxious', '平和': 'calm',
+    };
+    usePetStore.getState().setPetMood(petMoodMap[emotion.label] || 'calm');
+
+    // 记录情绪日志
+    const now = new Date();
+    useEmotionStore.getState().addLog({
+      date: now.toISOString().split('T')[0],
+      hour: now.getHours(),
+      score: emotion.score,
+      label: emotion.label,
+      note: text.substring(0, 100),
+    });
+
+    // 里程碑检测
+    const allLogs = JSON.parse(localStorage.getItem('xinyuan_emotionLogs') || '[]');
+    if (allLogs.length === 1) {
+      useMilestoneStore.getState().unlock({
+        type: 'first_emotion',
+        title: '🌱 初次表达',
+        description: '第一次向心元诉说深层情绪',
+      });
+    }
+
+    // 调用 Coze API 获取真实AI回复
+    const appStore = useAppStore.getState();
+    const cozeConvId = appStore.getCozeConvId(sessionId);
+    const cozeChatId = appStore.getCozeChatId(sessionId);
+
+    // 先创建占位 AI 消息，后续流式更新
+    const aiMsgId = (Date.now() + 1).toString();
+    const placeholderMsg = {
+      id: aiMsgId,
+      session_id: sessionId,
+      role: 'assistant' as const,
+      content: '',
+      emotion_score: emotion.score,
+      emotion_label: emotion.label,
+    };
+    addMessage(placeholderMsg);
+
+    try {
+      // 构建历史（用于续聊上下文）
+      const currentMessages = useChatStore.getState().messages;
+      const history = cozeConvId
+        ? currentMessages.filter(m => m.id !== aiMsgId).map((m) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+          }))
+        : [];
+
+      // 🔄 流式 SSE 调用——逐字返回
+      const stream = chatWithCozeStream(text, cozeConvId, history);
+      let lastConvId = cozeConvId;
+      let fullContent = '';
+      for await (const chunk of stream) {
+        if (chunk.type === 'conv_id') {
+          appStore.setCozeConvId(sessionId, chunk.data);
+          lastConvId = chunk.data;
+        } else if (chunk.type === 'answer_full') {
+          // answer 是累积全文，整体替换（避免重复叠加）
+          fullContent = chunk.data;
+          updateMessage(aiMsgId, fullContent);
+        } else if (chunk.type === 'text') {
+          // delta 增量，逐次追加
+          fullContent += chunk.data;
+          updateMessage(aiMsgId, fullContent);
+        }
+        // 'done' 类型忽略，循环自动结束
+      }
+
+      // 流式结束：统一清理 JSON 元数据，再最终更新
+      fullContent = cleanContent(fullContent) || fullContent;
+      updateMessage(aiMsgId, fullContent);
+
+      // 🎬 解析文本中的动作关键词，驱动宠物动画
+      const actionResult = parsePetAction(fullContent);
+      petIPC.sendToPet({ type: 'set_action', data: {
+        action: actionResult.action,
+        keyword: actionResult.keyword,
+      }});
+
+      // 通知宠物
+      const petEmotionLabel = emotion.label === '平和' ? '温暖' : emotion.label;
+      usePetStore.getState().notifyPet(fullContent.slice(0, 40) || '心元感受到了你的情绪…', petEmotionLabel, 'ai');
+      petIPC.sendToPet({ type: 'speech_bubble', data: {
+        text: fullContent.slice(0, 30) || '心元感受到了你的情绪…',
+        emotion: petEmotionLabel,
+      }});
+
+      // 🔈 将 AI 回复推送到设备喇叭播放
+      try {
+        const aiAPI = (window as any).aiAPI;
+        if (!aiAPI) {
+          console.warn('[ChatPage] ⚠️ aiAPI 不可用（preload 未暴露？）');
+        } else {
+          const sessionStatus = await aiAPI.getSessions();
+          console.log('[ChatPage] 📡 设备状态:', JSON.stringify(sessionStatus));
+
+          let sessionId = '';
+          if (sessionStatus?.active && sessionStatus.sessions?.length > 0) {
+            sessionId = sessionStatus.sessions[0].sessionId;
+          }
+
+          // 即使 getSessions 无结果也尝试播报（speakText 有内置 fallback 查找桥接客户端）
+          console.log('[ChatPage] 🔊 尝试设备播报, sessionId:', sessionId || '(自动查找), 文字长度:', fullContent.length);
+          const result = await aiAPI.speakText(sessionId, fullContent);
+          console.log('[ChatPage] 🔊 播报结果:', result);
+        }
+      } catch (deviceErr) {
+        console.error('[ChatPage] ❌ 设备播报失败:', deviceErr);
+      }
+    } catch (err) {
+      console.error('[ChatPage] ❌ 流式 API 失败 | 错误:', (err as Error).message);
+      console.error('[ChatPage] ℹ️ 当前 cozeConvId:', appStore.getCozeConvId(sessionId));
+      // 降级到本地模板，更新占位消息
+      const response = generateResponse(text, emotion);
+      updateMessage(aiMsgId, response);
+
+      // 🎬 降级回复也解析动作
+      const fallbackAction = parsePetAction(response);
+      petIPC.sendToPet({ type: 'set_action', data: {
+        action: fallbackAction.action,
+        keyword: fallbackAction.keyword,
+      }});
+
+      // 降级回复也通知宠物
+      usePetStore.getState().notifyPet(response.slice(0, 40), emotion.label, 'ai');
+      petIPC.sendToPet({ type: 'speech_bubble', data: {
+        text: response.slice(0, 30),
+        emotion: emotion.label,
+      }});
+    }
+
+    setLoading(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const moodBg: Record<string, string> = {
+    '极度低落': 'linear-gradient(135deg, #1a1a30 0%, #1a1025 100%)',
+    '低落': 'linear-gradient(135deg, #1a1a30 0%, #1a1525 100%)',
+    '轻微低落': 'linear-gradient(135deg, #1a1a2e 0%, #1a1a25 100%)',
+    '略感不适': 'linear-gradient(135deg, #1a1a2e 0%, #1a1a28 100%)',
+    '平和': 'linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%)',
+  };
+
+  // 📋 复制单条消息
+  const copyMessage = async (msg: { id: string; content: string }) => {
+    try {
+      await navigator.clipboard.writeText(msg.content);
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      // 降级：用传统方式
+      const ta = document.createElement('textarea');
+      ta.value = msg.content;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    }
+  };
+
+  // 📋 复制全部对话
+  const copyFullConversation = async () => {
+    const state = useChatStore.getState();
+    const text = state.messages
+      .map(m => (m.role === 'user' ? '你' : '心元') + '：' + m.content)
+      .join('\n\n');
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: moodBg[currentMood] || moodBg['平和'], transition: 'background 0.5s' }}>
+      {/* 顶部会话栏 */}
+      <div style={{
+        padding: '8px 20px', borderBottom: '1px solid var(--border)',
+        display: 'flex', gap: 8, overflowX: 'auto', alignItems: 'center', flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>历史:</span>
+        <button
+          onClick={() => { const sid = useAppStore.getState().initSession(); loadHistory(sid); }}
+          style={{ background: 'var(--accent-warm)', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          + 新对话
+        </button>
+        {sessions.slice(0, 10).map((s) => (
+          <button
+            key={s.session_id}
+            onClick={() => { useAppStore.getState().setCurrentSession(s.session_id); loadHistory(s.session_id); }}
+            style={{
+              background: s.session_id === currentSessionId ? 'var(--bg-tertiary)' : 'transparent',
+              border: '1px solid var(--border)', borderRadius: 6, padding: '3px 10px',
+              fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            {new Date(s.last_active).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />{/* 占位，把复制全部推到右侧 */}
+        {messages.length > 0 && (
+          <button onClick={copyFullConversation} style={{
+            background: 'var(--accent-warm)', color: '#fff', border: 'none',
+            borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>📋 复制全部</button>
+        )}
+      </div>
+
+      {/* 消息列表 */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign: 'center', paddingTop: 100, color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>💙</div>
+            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text-secondary)' }}>
+              嗨，我是心元
+            </div>
+            <div style={{ fontSize: 14, lineHeight: 1.8 }}>
+              我不是来给你答案的<br />
+              我是来陪你一起找答案的<br /><br />
+              今天有什么想和我聊的吗？
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg) => (
+          <div key={msg.id} className="fade-in" style={{
+            display: 'flex', marginBottom: 16,
+            justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+          }}>
+            <div style={{
+              maxWidth: '75%', padding: '12px 18px', borderRadius: 16,
+              borderTopRightRadius: msg.role === 'user' ? 4 : 16,
+              borderTopLeftRadius: msg.role === 'assistant' ? 4 : 16,
+              background: msg.role === 'user' ? 'var(--accent-warm)' : 'var(--bg-card)',
+              color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
+              border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
+              fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              position: 'relative',
+            }}>
+              {/* 📋 复制按钮 */}
+              <button
+                onClick={() => copyMessage(msg)}
+                title={copiedId === msg.id ? '已复制' : '复制'}
+                style={{
+                  position: 'absolute', top: 6, right: 8,
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  fontSize: copiedId === msg.id ? 11 : 14, opacity: copiedId === msg.id ? 1 : 0.3,
+                  color: msg.role === 'user' ? '#ffffffaa' : 'var(--text-muted)',
+                  padding: '2px 4px', borderRadius: 4, lineHeight: 1,
+                  transition: 'opacity 0.2s',
+                }}
+                onMouseEnter={(e) => { if (copiedId !== msg.id) e.currentTarget.style.opacity = '0.9'; }}
+                onMouseLeave={(e) => { if (copiedId !== msg.id) e.currentTarget.style.opacity = '0.3'; }}
+              >
+                {copiedId === msg.id ? '✓ 已复制' : '📋'}
+              </button>
+              {msg.content}
+              {msg.role === 'assistant' && msg.emotion_label && (
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', opacity: 0.7 }}>
+                  🧠 情绪感知: {msg.emotion_label}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {isLoading && (
+          <div style={{ padding: '12px 18px' }} className="pulse">
+            <span style={{ color: 'var(--text-muted)' }}>心元正在聆听...</span>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* 输入框 */}
+      <div style={{
+        padding: '16px 24px', borderTop: '1px solid var(--border)',
+        background: 'var(--bg-secondary)', flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+          {voiceSupported && (
+            <button
+              onClick={toggleVoice}
+              title={
+                voiceState === 'listening' ? '点击停止语音' :
+                voiceState === 'thinking' ? '思考中...' :
+                voiceState === 'speaking' ? '心元正在说话...' :
+                '点击开始语音对话'
+              }
+              style={{
+                height: 44, minWidth: 44, borderRadius: 22,
+                cursor: voiceState === 'thinking' ? 'default' : 'pointer',
+                fontSize: 20, background:
+                  voiceState === 'listening' ? '#ef4444' :
+                  voiceState === 'thinking' ? '#f59e0b' :
+                  voiceState === 'speaking' ? '#8b5cf6' :
+                  'var(--bg-card)',
+                color: voiceState === 'idle' ? 'var(--text-secondary)' : '#fff',
+                transition: 'all 0.3s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: voiceState === 'idle' ? '1px solid var(--border)' : 'none',
+              }}
+              disabled={voiceState === 'thinking'}
+            >
+              {voiceState === 'listening' ? '⏹' :
+               voiceState === 'thinking' ? '💭' :
+               voiceState === 'speaking' ? '🔊' : '🎤'}
+            </button>
+          )}
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="在这里写下你想说的…（Enter发送，Shift+Enter换行）"
+            className="input-field"
+            style={{ resize: 'none', minHeight: 44, maxHeight: 120, flex: 1 }}
+            rows={1}
+          />
+          <button className="btn btn-primary" onClick={handleSend}
+            disabled={isLoading || !input.trim()}
+            style={{ height: 44, minWidth: 70, opacity: isLoading || !input.trim() ? 0.5 : 1 }}>
+            {isLoading ? '...' : '发送'}
+          </button>
+        </div>
+        {currentMood && currentMood !== '平和' && (
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--accent-warm)' }}>
+            🧠 心元感知到: {currentMood} · 我在这里
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
