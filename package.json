@@ -1,6 +1,6 @@
 {
   "name": "xinyuan-emo-mate",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "心元 — AI情绪搭子空间",
   "type": "module",
   "main": "electron/main.js",
