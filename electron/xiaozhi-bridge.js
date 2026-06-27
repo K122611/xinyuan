@@ -31,7 +31,9 @@ const CERT_DIR = path.join(__dirname, '..', 'certs');
 
 // 笔记本电脑热点 IP（ESP32 连接此热点后访问）
 // 自动检测热点 IP，优先使用传入参数
-const { detectHotspotIP } = require('../scripts/auto_detect_ip.cjs');
+import { createRequire } from 'module';
+const _require = createRequire(import.meta.url);
+const { detectHotspotIP } = _require('../scripts/auto_detect_ip.cjs');
 let LAPTOP_HOTSPOT_IP = '192.168.137.1';  // 默认值，会被 constructor 覆盖
 const WS_PORT = 8888;
 
