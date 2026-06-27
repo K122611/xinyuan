@@ -49,9 +49,11 @@
     },
     "win": {
       "target": [
-        "nsis"
+        "portable"
       ],
-      "icon": "public/favicon.ico"
+      "icon": "public/favicon.ico",
+      "signAndEditExecutable": false,
+      "signDlls": false
     },
     "nsis": {
       "oneClick": false,
