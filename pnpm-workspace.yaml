@@ -1,0 +1,5 @@
+allowBuilds:
+  '@serialport/bindings-cpp': false
+  electron-winstaller: false
+  esbuild: false
+  puppeteer: false

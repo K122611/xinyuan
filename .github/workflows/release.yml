@@ -1,0 +1,62 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Vite
+        run: npx vite build
+
+      - name: Build Electron (no publish)
+        run: npx electron-builder build --win --x64 --publish=never
+
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          Write-Host "Tag: $tag"
+          Write-Host "Files in release directory:"
+          Get-ChildItem -Path release
+          
+          $exists = gh release view $tag 2>$null
+          if (-not $exists) {
+            Write-Host "Creating release $tag..."
+            gh release create $tag --title "$tag" --notes "自动构建版本"
+          }
+          
+          $files = Get-ChildItem -Path "release\*" -Include "*.exe","*.exe.blockmap","latest.yml"
+          Write-Host "Found $($files.Count) files to upload"
+          foreach ($f in $files) {
+            Write-Host "Uploading: $($f.Name) ($([math]::Round($f.Length/1MB,1)) MB)"
+            gh release upload $tag $f.FullName --clobber
+            Write-Host "Done: $($f.Name)"
+          }

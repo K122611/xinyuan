@@ -1,0 +1,50 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+release/
+release2/
+out/
+build/
+*.exe
+*.msi
+*.zip
+*.tar.gz
+
+# 环境变量（包含API密钥）
+.env
+!.env.example
+
+# 临时/调试文件
+*.txt
+opus_roundtrip_test.wav
+test_frame1.opus
+*.opus
+stt_temp.wav
+xinyuan_stt_temp.wav
+debug/
+diag_audio/
+nodejs/
+
+# 测试脚本
+test-*.mjs
+test-*.js
+test-*.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 日志
+*.log
+npm-debug.log*
+

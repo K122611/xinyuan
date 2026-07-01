@@ -1,0 +1,72 @@
+﻿[
+    {
+        "Id":  315552,
+        "ProcessName":  "AionUi",
+        "MainWindowTitle":  "AionUi"
+    },
+    {
+        "Id":  269168,
+        "ProcessName":  "ApplicationFrameHost",
+        "MainWindowTitle":  "设置"
+    },
+    {
+        "Id":  300688,
+        "ProcessName":  "chrome",
+        "MainWindowTitle":  "Release v1.0.3 - 桌宠集成 + API 更新 + CI/CD 修复 · K122611/xinyuan - Google Chrome"
+    },
+    {
+        "Id":  321848,
+        "ProcessName":  "Coze",
+        "MainWindowTitle":  "扣子 - 技能商店"
+    },
+    {
+        "Id":  279100,
+        "ProcessName":  "delta_force_launcher",
+        "MainWindowTitle":  "三角洲行动"
+    },
+    {
+        "Id":  291792,
+        "ProcessName":  "JustGo",
+        "MainWindowTitle":  "JustGo"
+    },
+    {
+        "Id":  302180,
+        "ProcessName":  "msedge",
+        "MainWindowTitle":  "Edit release · K122611/xinyuan 和另外 6 个页面 - 个人 - Microsoft​ Edge"
+    },
+    {
+        "Id":  270776,
+        "ProcessName":  "Nahimic3",
+        "MainWindowTitle":  "Nahimic"
+    },
+    {
+        "Id":  281112,
+        "ProcessName":  "QQMusic",
+        "MainWindowTitle":  "桌面歌词"
+    },
+    {
+        "Id":  299776,
+        "ProcessName":  "Steam++",
+        "MainWindowTitle":  "Watt Toolkit"
+    },
+    {
+        "Id":  285684,
+        "ProcessName":  "steamwebhelper",
+        "MainWindowTitle":  "好友列表"
+    },
+    {
+        "Id":  320140,
+        "ProcessName":  "SystemSettings",
+        "MainWindowTitle":  "设置"
+    },
+    {
+        "Id":  269816,
+        "ProcessName":  "TextInputHost",
+        "MainWindowTitle":  "Windows 输入体验"
+    },
+    {
+        "Id":  277108,
+        "ProcessName":  "Weixin",
+        "MainWindowTitle":  "微信"
+    }
+]

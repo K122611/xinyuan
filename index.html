@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: file:; connect-src 'self' ws: wss: http://localhost:* https:;" />
+    <title>心元 EMO-Mate</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // 🔒 在 React 渲染前同步注入宠物窗口样式 — 消除背景闪烁竞态
+      if (window.location.hash.includes('floating-pet') || window.location.search.includes('floating-pet')) {
+        // 内联 style 立即生效，优先级仅低于 !important，消灭 CSS 加载前的 #0f0f1a 窗口期
+        document.documentElement.style.background = 'transparent';
+        document.body.style.background = 'transparent';
+        var root = document.getElementById('root');
+        if (root) root.style.background = 'transparent';
+        // 类名兜底（触发 global.css 的 !important 规则）
+        document.documentElement.classList.add('floating-pet-window');
+        document.body.classList.add('floating-pet-window');
+        if (root) root.classList.add('floating-pet-window');
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
