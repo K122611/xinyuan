@@ -13,7 +13,7 @@ const TTS_PS1 = 'C:/Users/LENOVO/Desktop/心元/tts_temp.ps1';
 const STT_WAV = 'C:/Users/LENOVO/Desktop/心元/stt_temp.wav';
 const STT_PS1 = 'C:/Users/LENOVO/Desktop/心元/stt_temp.ps1';
 const COZE_BOT = '7649689722696237091';
-const COZE_TOKEN = 'pat_CyuRGR2Jl8sCA5z9ExlK1leDoDsT04sDkegNp7ziiMRKEATt1uJgNCpIjFsZ8koZ';
+const COZE_TOKEN = 'pat_XE8weoH9QlN1Ag1zTMOUMPzNu5WCHzsGFkycP1kNOqYncBJg6HTmp7u0ovGTLsWE';
 
 process.on('uncaughtException', (e) => { try { writeFileSync(LOG, `[FATAL] ${e.message}\n${e.stack}\n`); } catch(_) {} });
 process.on('unhandledRejection', (r) => { try { writeFileSync(LOG, `[FATAL] rejection: ${r}\n`, { flag: 'a' }); } catch(_) {} });

@@ -11,7 +11,7 @@ function getCozeConfig(): { baseUrl: string; token: string; botId: string } {
   // 内置默认凭据：开箱即用，无需用户配置
   return {
     baseUrl: 'https://api.coze.cn/v3/chat',
-    token: 'pat_CyuRGR2Jl8sCA5z9ExlK1leDoDsT04sDkegNp7ziiMRKEATt1uJgNCpIjFsZ8koZ',
+    token: 'pat_XE8weoH9QlN1Ag1zTMOUMPzNu5WCHzsGFkycP1kNOqYncBJg6HTmp7u0ovGTLsWE',
     botId: '7649689722696237091',
   };
 }
