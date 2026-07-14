@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 心元 AI 对话引擎 (Electron 主进程)
  *
  * 集成：Coze AI、VAD 语音检测、Windows STT、Edge TTS、Opus 编码
@@ -16,12 +16,11 @@ const require = createRequire(import.meta.url);
 const OpusScript = require('opusscript');
 
 // ========== 配置 ==========
+// dotenv 加载（修复：ROOT 必须在使用前定义）
+const ROOT = path.resolve(__dirname, '..');
+try { require('dotenv').config({ path: path.join(ROOT, '.env'), override: false }); } catch (_) {}
 const COZE_BOT = process.env.COZE_BOT_ID || '7649689722696237091';
 const COZE_TOKEN = process.env.COZE_TOKEN || '';
-// dotenv 加载（Electron主进程环境变量优先）
-try { require('dotenv').config({ path: path.join(ROOT, '.env'), override: false }); } catch (_) {}
-const ROOT = path.resolve(__dirname, '..');
-// 使用系统 Temp 目录，避免中文路径导致 System.Speech（老API）乱码
 const STT_WAV = path.join(os.tmpdir(), 'xinyuan_stt_temp.wav');
 const STT_PS1 = path.join(ROOT, 'stt_temp.ps1');
 

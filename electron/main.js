@@ -23,6 +23,11 @@ import { start as startOTAInterceptor, stop as stopOTAInterceptor, detectLocalIP
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// ========== 加载 .env (修复：之前未加载导致 Supabase 注册失败) ==========
+import dotenv from 'dotenv';
+const ROOT = path.resolve(__dirname, '..');
+dotenv.config({ path: path.join(ROOT, '.env') });
+
 // ========== 主进程日志转发到渲染进程 ==========
 // 使 F12 DevTools Console 能看到主进程的关键日志
 (function setupLogForwarding() {

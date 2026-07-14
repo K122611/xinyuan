@@ -3,12 +3,8 @@ node_modules/
 
 # 构建产物
 dist/
-release/
-release2/
 out/
 build/
-*.exe
-*.msi
 *.zip
 *.tar.gz
 

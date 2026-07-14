@@ -1,6 +1,6 @@
 {
   "name": "xinyuan-emo-mate",
-  "version": "1.0.2",
+  "version": "1.2.0",
   "description": "心元 EMO-Mate - 有温度的AI情感陪伴助手",
   "type": "module",
   "main": "electron/main.js",
@@ -22,6 +22,7 @@
       "buildResources": "public"
     },
     "files": [
+      ".env",
       "dist/**/*",
       "electron/**/*",
       "package.json"
@@ -60,6 +61,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
+    "dotenv": "^16.3.1",
     "edge-tts": "^1.0.1",
     "esptool-js": "^0.6.0",
     "lottie-react": "^2.4.0",
